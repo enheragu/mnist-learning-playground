@@ -21,7 +21,8 @@ from models.CNN_5L import CNN_5L
 # How many train loops are executed to study its variance
 train_loops = 800
 sameseed = False
-output_path = "./output_data"
+current_dir_path = os.path.dirname(os.path.abspath(__file__))
+output_path = os.path.join(current_dir_path,"../output_data")
 
 # General configuration
 input_size = 28 * 28  # Tamaño de cada imagen aplanada

@@ -12,7 +12,7 @@ from scipy.stats import norm
 from utils.yaml_utils import getMetricsLogFile 
 from main import output_path
 
-bin_size = 9
+bin_size = 15
 
 ## Custom color definitions
 c_blue = "#0171ba"
