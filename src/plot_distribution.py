@@ -35,9 +35,11 @@ def plot_metric_distribution(metrics_data, metric_name = 'accuracy'):
 
     for model_name in metrics_data.keys():
         data_y = [entry[metric_name] for entry in metrics_data[model_name].values()]
+        train_duration = np.mean([entry['train_duration'] for entry in metrics_data[model_name].values()])
+        train_duration_str = f"{int(train_duration // 60)}min {train_duration % 60:.2f}s"
         color = next(color_iterator)
 
-        sns.histplot(data_y, bins=bin_size, stat="density", alpha=0.4, label=f"{model_name} (n = {len(data_y)})",
+        sns.histplot(data_y, bins=bin_size, stat="density", alpha=0.4, label=f"{model_name}   (n = {len(data_y)})   (mean train: {train_duration_str})",
                      color=color, edgecolor='none', ax=ax)
 
         # Ajuste de la distribución normal para el modelo
