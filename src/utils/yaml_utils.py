@@ -40,7 +40,7 @@ def updateMetricsLogFile(metrics, file_path="training_metrics.yaml"):
         # Add custom representation functions to the YAML dumper
         yaml.add_representer(list, represent_list)
         yaml.add_representer(dict, represent_dict)
-        yaml.dump(all_metrics, file, default_flow_style=False, allow_unicode=True, indent=4, width=4000)
+        yaml.dump(all_metrics, file, default_flow_style=False, allow_unicode=True, indent=4, width=5000)
 
 
     print(f"Updated metrics file in: {file_path}")
