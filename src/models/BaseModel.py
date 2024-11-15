@@ -29,6 +29,8 @@ class BaseModelTrainer(nn.Module):
         self.base_output_path = output_path
         self.model_name = type(self).__name__
 
+        self.best_trained_path = os.path.join(self.output_data_path,f"{os.getpid()}_best_model.pth")
+        self.model_architecture_path = self.output_data_path,"model_architecture.pth"
 
     # Entrenamiento del modelo
     def train_model(self, train_loader, test_loader, num_epochs = 500):
@@ -62,7 +64,7 @@ class BaseModelTrainer(nn.Module):
                 best_accuracy = accuracy
                 epochs_without_improvement = 0
                 print("\tNew best accuracy, store model...")
-                torch.save(self.state_dict(), os.path.join(self.output_data_path,"best_model.pth"))
+                torch.save(self.state_dict(), self.best_trained_path)
             else:
                 epochs_without_improvement += 1
 
@@ -135,11 +137,10 @@ class BaseModelTrainer(nn.Module):
         self.output_data_path = os.path.join(self.base_output_path, self.model_name)
         os.makedirs(self.output_data_path, exist_ok=True)
 
-        torch.save(self, os.path.join(self.output_data_path,"model_architecture.pth"))
+        torch.save(self, os.path.join(self.model_architecture_path))
 
     def load_best_model(self):
-        best_path = os.path.join(self.output_data_path, "best_model.pth")
-        self.load_state_dict(torch.load(best_path))
+        self.load_state_dict(torch.load(self.best_trained_path))
         print("Best model loaded.")
 
     def forward(self, x):
