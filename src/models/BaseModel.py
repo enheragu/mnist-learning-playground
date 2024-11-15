@@ -30,6 +30,8 @@ class BaseModelTrainer(nn.Module):
         self.model_name = type(self).__name__
 
         self.output_data_path = os.path.join(self.base_output_path, self.model_name)
+        os.makedirs(self.output_data_path, exist_ok=True)
+        
         self.best_trained_path = os.path.join(self.output_data_path,f"{os.getpid()}_best_model.pth")
         self.model_architecture_path = self.output_data_path,"model_architecture.pth"
 
@@ -134,9 +136,7 @@ class BaseModelTrainer(nn.Module):
         print("")
 
     def save_architecture(self):
-        os.makedirs(self.output_data_path, exist_ok=True)
-
-        torch.save(self, os.path.join(self.model_architecture_path))
+        torch.save(self, self.model_architecture_path)
 
     def load_best_model(self):
         self.load_state_dict(torch.load(self.best_trained_path))
