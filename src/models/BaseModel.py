@@ -31,9 +31,9 @@ class BaseModelTrainer(nn.Module):
 
         self.output_data_path = os.path.join(self.base_output_path, self.model_name)
         os.makedirs(self.output_data_path, exist_ok=True)
-        
+
         self.best_trained_path = os.path.join(self.output_data_path,f"{os.getpid()}_best_model.pth")
-        self.model_architecture_path = self.output_data_path,"model_architecture.pth"
+        self.model_architecture_path = os.path.join(self.output_data_path,"model_architecture.pth")
 
     # Entrenamiento del modelo
     def train_model(self, train_loader, test_loader, num_epochs = 500):
