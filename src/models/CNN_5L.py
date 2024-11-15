@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from models.BaseModel import BaseModelTrainer
 
-# Model from: https://github.com/Coderx7/SimpleNet/blob/master/SimpNet_V1/Models/NoDropout/train_test.prototxt
+# Model from: https://arxiv.org/pdf/2008.10400
 # C3 from Figure 8
 class CNN_5L(BaseModelTrainer):
     def __init__(self, input_size, num_classes=10, learning_rate=0.001, patience=10, seed=42, output_path="", input_channels=1):

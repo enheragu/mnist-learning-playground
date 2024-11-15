@@ -7,9 +7,9 @@ from models.BaseModel import BaseModelTrainer
 
 # Model from: https://arxiv.org/pdf/2008.10400
 # C1 from Figure 8
-class CNN_2L(BaseModelTrainer):
+class CNN_4L(BaseModelTrainer):
     def __init__(self, input_size, num_classes=10, learning_rate=0.001, patience=10, seed=42, output_path="", input_channels=1):
-        super(CNN_2L, self).__init__(input_size=None, num_classes=num_classes, learning_rate=learning_rate, patience=patience, output_path=output_path)
+        super(CNN_4L, self).__init__(input_size=None, num_classes=num_classes, learning_rate=learning_rate, patience=patience, output_path=output_path)
         
         # Definir las capas convolucionales
         self.conv_layers = nn.Sequential(
@@ -29,7 +29,9 @@ class CNN_2L(BaseModelTrainer):
 
         # Fully connected layer for clasification
         self.fc_layers = nn.Sequential(
-            nn.Linear(3200, num_classes),
+            nn.Linear(3200, 100),
+            nn.BatchNorm1d(100),
+            nn.Linear(100, num_classes),
             nn.BatchNorm1d(10)
         ).to(self.device)
 

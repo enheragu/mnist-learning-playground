@@ -11,12 +11,7 @@ from torchvision import datasets, transforms
 
 
 from utils.yaml_utils import updateMetricsLogFile
-from models.SimplePerceptron import SimplePerceptron
-from models.HiddenLayerPerceptron import HiddenLayerPerceptron
-from models.DNN_6L import DNN_6L
-from models.CNN_13L import CNN_13L
-from models.CNN_2L import CNN_2L
-from models.CNN_5L import CNN_5L
+from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_13L, CNN_2L, CNN_4L, CNN_5L
 
 # How many train loops are executed to study its variance
 train_loops = 800
@@ -34,12 +29,13 @@ num_epochs = 500
 
 
 # Dict with how many iterations to be performed with each model
-model_iterations = {CNN_2L: 197,                # https://github.com/Coderx7/SimpleNet/blob/master/SimpNet_V1/Models/NoDropout/train_test.prototxt
-              CNN_5L: 200,                # https://github.com/Coderx7/SimpleNet/blob/master/SimpNet_V1/Models/NoDropout/train_test.prototxt
-              CNN_13L: 188,             # no-dropout -> https://arxiv.org/pdf/1608.06037
-              DNN_6L: 188,
-              HiddenLayerPerceptron: 139,
-              SimplePerceptron: 0}
+model_iterations = {CNN_2L: 10,
+              CNN_4L: 200,
+              CNN_5L: 10,
+              CNN_13L: 10,             # no-dropout -> https://arxiv.org/pdf/1608.06037
+              DNN_6L: 10,
+              HiddenLayerPerceptron: 10,
+              SimplePerceptron: 10}
 
 
 
