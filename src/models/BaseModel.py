@@ -26,14 +26,16 @@ class BaseModelTrainer(nn.Module):
         self.patience = patience
         self.to(self.device)
 
-        self.base_output_path = output_path
+        
         self.model_name = type(self).__name__
+        self.base_output_path = output_path
 
-        self.output_data_path = os.path.join(self.base_output_path, self.model_name)
-        os.makedirs(self.output_data_path, exist_ok=True)
+        if self.base_output_path is not None:
+            self.output_data_path = os.path.join(self.base_output_path, self.model_name)
+            os.makedirs(self.output_data_path, exist_ok=True)
 
-        self.best_trained_path = os.path.join(self.output_data_path,f"{os.getpid()}_best_model.pth")
-        self.model_architecture_path = os.path.join(self.output_data_path,"model_architecture.pth")
+            self.best_trained_path = os.path.join(self.output_data_path,f"{os.getpid()}_best_model.pth")
+            self.model_architecture_path = os.path.join(self.output_data_path,"model_architecture.pth")
 
     # Entrenamiento del modelo
     def train_model(self, train_loader, test_loader, num_epochs = 500):
@@ -67,7 +69,11 @@ class BaseModelTrainer(nn.Module):
                 best_accuracy = accuracy
                 epochs_without_improvement = 0
                 print("\tNew best accuracy, store model...")
-                torch.save(self.state_dict(), self.best_trained_path)
+                
+                if self.base_output_path is not None:
+                    torch.save(self.state_dict(), self.best_trained_path)
+                else:
+                    print("[ERROR] Cannot store model if no path is provided")
             else:
                 epochs_without_improvement += 1
 
@@ -136,14 +142,21 @@ class BaseModelTrainer(nn.Module):
         print("")
 
     def save_architecture(self):
-        torch.save(self, self.model_architecture_path)
+        if self.base_output_path is not None:
+            torch.save(self, self.model_architecture_path)
+        else:
+            print("[ERROR] Cannot store architecture if no path is provided.")
 
     def load_best_model(self):
-        self.load_state_dict(torch.load(self.best_trained_path))
-        print("Best model loaded.")
+
+        if self.base_output_path is not None:
+            self.load_state_dict(torch.load(self.best_trained_path))
+            print("Best model loaded.")
+        else:
+            print("Not known path from where to load best model.")
 
     def forward(self, x):
-        raise NotImplementedError("This method should be implemented in subclasses")
+        raise NotImplementedError("This method should be implemented in subclasses.")
     
 
     def spinTrainEval(self, train_loader, test_loader, num_epochs = 500):
