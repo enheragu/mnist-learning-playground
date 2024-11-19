@@ -3,6 +3,7 @@
 
 import os
 import itertools
+import tabulate
 
 import numpy as np
 import seaborn as sns
@@ -12,7 +13,7 @@ from scipy.stats import norm
 from utils.yaml_utils import getMetricsLogFile 
 from main import output_path
 
-bin_size = 15
+bin_size = 20
 
 ## Custom color definitions
 c_blue = "#0171ba"
@@ -136,6 +137,54 @@ def plotParamAmplitudeRelation(metrics_data):
     plt.grid(True)
 
 
+"""
+    Just plots the sampling error for each model against sample size
+"""
+def plotSamplingError(metrics_data):
+    sample_sizes = np.arange(1, 101)  # Tamaño de muestra de 1 a 100
+
+    accuracy_data = {}
+    print("Data available is:")
+    for model, data in metrics_data.items():
+        accuracy_data[model] = [entry['accuracy']*100 for entry in metrics_data[model].values()]
+        
+
+    fig, ax = plt.subplots(figsize=(12, 9))
+    color_iterator = itertools.cycle(color_palette_list)
+    eq = r'Sampling Error = $\sigma/\sqrt{n}$'
+
+    row_data = [['Model', '1 Sample', '5 Samples', '10 Samples', '25 Samples', '50 Samples', '100 Samples']]
+    for model_name, data in accuracy_data.items():        
+        g_std = np.std(data)
+        errors = g_std / np.sqrt(sample_sizes)
+        plt.plot(sample_sizes, errors, label=f'{model_name}', color=next(color_iterator), linewidth=2)
+        
+        row_data.append([
+            model_name, 
+            f"{errors[0]:.3f}",   # Error for 1 observation
+            f"{errors[4]:.3f}",   # Error for 5 observations
+            f"{errors[9]:.3f}",   # Error for 10 observations
+            f"{errors[24]:.3f}",   # Error for 25 observations
+            f"{errors[49]:.3f}",   # Error for 50 observations
+            f"{errors[99]:.3f}"   # Error for 100 observations
+        ])
+
+    x_center = (ax.get_xlim()[0] + ax.get_xlim()[1]) * 0.5
+    y_center = (ax.get_ylim()[0] + ax.get_ylim()[1]) * 0.5
+    ax.text(x_center, y_center, eq, color="Black", alpha=0.5, fontsize=17, ha="center", va="center")
+        
+    plt.title('Sampling error')
+    plt.ylabel('SamplingError (%)')
+    plt.xlabel('Sample Size (N)')
+
+    # plt.xscale('log')
+    plt.grid(visible=True, color=c_grey, linestyle='--', linewidth=0.5, alpha=0.8)
+    plt.legend()
+    plt.tight_layout()
+
+    print("\nSummary Table of Sampling Errors (%):")
+    print(tabulate.tabulate(row_data, headers="firstrow", tablefmt="fancy_grid"))
+
 if __name__ == "__main__":
     metrics_data = getAllModelData()
 
@@ -152,7 +201,8 @@ if __name__ == "__main__":
                                [c_blue,c_darkgrey],
                                [c_yellow, c_red, c_purple, c_grey],
                                color_palette_list])
-        plotParamAmplitudeRelation(metrics_data)
+        # plotParamAmplitudeRelation(metrics_data)
+        plotSamplingError(metrics_data)
     else:
         print("No models found or no metrics to plot.")
     plt.show()
