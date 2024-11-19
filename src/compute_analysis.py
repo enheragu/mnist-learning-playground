@@ -7,8 +7,9 @@ import scipy.stats as stats
 
 from plot_distribution import getAllModelData
 
-montecarlo_samples = 10000000
-bootstrap_samples = 100000
+montecarlo_samples = 500000 # Slow version :) -> 1000000
+bootstrap_samples = 50000 # Slow version :) -> 100000
+
 """
     Given 2 sets of data it computes the probability of, when getting one random sample
     from each of them, the order is switched:
@@ -17,24 +18,31 @@ bootstrap_samples = 100000
     The probability is based on a MonteCarlo simulation (with n_samples) based on an 
     approximation based on a Normal distribution of the provided data.
 """
-def computeMonteCarloSwitchedProbability(g1_data, g2_data, g1_name = "group1", g2_name = "group2", n_samples = montecarlo_samples):
-    g1_mean = np.mean(g1_data)
-    g2_mean = np.mean(g2_data)
-
-    g1_std = np.std(g1_data)
-    g2_std = np.std(g2_data)
-
-    samples1 = np.random.normal(g1_mean, g1_std, n_samples)
-    samples2 = np.random.normal(g2_mean, g2_std, n_samples)
+def computeMonteCarloSwitchedProbability(dict_data = {'group1': [1,3], 'group2': [0,4]}, g_names = ["group1", "group2"], n_samples = montecarlo_samples):
     
-    count1 = np.sum(samples1 > samples2)
-    probability1 = count1 / n_samples
+    max_list = [np.max(dict_data[name]) for name in g_names]
+    original_order = np.argsort(max_list) # Get index that sort the array min to max
+    
+    means_list = [np.mean(dict_data[name]) for name in g_names]
+    std_list = [np.std(dict_data[name]) for name in g_names]
 
-    # print(f"\t[MonteCarlo] {g1_name} samples: {len(g1_data)}")
-    # print(f"\t[MonteCarlo] {g2_name} samples: {len(g2_data)}")
+    samples_list = [np.random.normal(means_list[index], std_list[index], n_samples) for index in range(len(means_list))]    
+
+    switched_count = 0
+    for i in range(n_samples):
+        observations_list = [samples_list[j][i] for j in range(len(g_names))]
+        observations_order = np.argsort(observations_list)
+
+        if not np.array_equal(observations_order, original_order):
+            switched_count += 1
+    
+    switched_probability = switched_count / n_samples
+    
     print(f"\t[MonteCarlo] {n_samples = }")
-    print(f"\t[MonteCarlo] p({g1_name} > {g2_name}) = {probability1}")
-    print(f"\t[MonteCarlo] p({g1_name} < {g2_name}) = {1.0-probability1}")
+    print(f"\t[MonteCarlo] p(!original-order) = {switched_probability:.4f}")
+    print(f"\t[MonteCarlo] p(original-order) = {1-switched_probability:.4f}")
+    return switched_probability
+
 
 """
     Does the same as computeMonteCarloSwitchedProbability function, but in this case
@@ -42,57 +50,102 @@ def computeMonteCarloSwitchedProbability(g1_data, g2_data, g1_name = "group1", g
     as in a Bootstrap approach, based on the original data instead of the approximated 
     Normal distribution.
 """
-def computeBootstrapSwitchedProbability(g1_data, g2_data, g1_name = "group1", g2_name = "group2", n_samples = bootstrap_samples):
+def computeBootstrapSwitchedProbability(dict_data = {'group1': [1,3], 'group2': [0,4]}, g_names = ["group1", "group2"], n_samples = bootstrap_samples):
     
-    count1 = 0
-    # Bootstrap resampling
+    max_list = [np.max(dict_data[name]) for name in g_names]
+    original_order = np.argsort(max_list) # Get index that sort the array min to max
+
+    switched_count = 0
     for _ in range(n_samples):
-        sample1 = np.random.choice(g1_data, size=len(g1_data), replace=True)
-        sample2 = np.random.choice(g2_data, size=len(g2_data), replace=True)
-        
-        valor1 = np.random.choice(sample1)
-        valor2 = np.random.choice(sample2) 
-        if valor1 > valor2: count1 += 1
+        # Bootstrap resampling (resamples and then takes random observation from that)
+        observations_list = [
+            np.random.choice(
+                np.random.choice(dict_data[name], size=len(dict_data[name]), replace=True)
+            )
+            for name in g_names
+        ]
+        observations_order = np.argsort(observations_list)
 
-    probability1 = count1 / n_samples
+        if not np.array_equal(observations_order, original_order):
+            switched_count += 1
 
-    # print(f"\t[Bootstrap] {g1_name} samples: {len(g1_data)}")
-    # print(f"\t[Bootstrap] {g2_name} samples: {len(g2_data)}")
+    switched_probability = switched_count / n_samples
+
     print(f"\t[Bootstrap] {n_samples = }")
-    print(f"\t[Bootstrap] p({g1_name} > {g2_name}) = {probability1}")
-    print(f"\t[Bootstrap] p({g1_name} < {g2_name}) = {1.0-probability1}")
+    print(f"\t[Bootstrap] p(!original-order) = {switched_probability:.4f}")
+    print(f"\t[Bootstrap] p(original-order) = {1-switched_probability:.4f}")
+    return switched_probability
+
+"""
+    Wrap function to compute switched probability for a given data dict and tags with both MonteCarlo and
+    Bootstrap approach
+"""
+def computeSwtichedProbability(dict_data, g_names):
+    max_list = [np.max(dict_data[name]) for name in g_names]
+    original_order = np.argsort(max_list) # Get index that sort the array min to max
+    
+    print(f"Analysis of switched probability for {g_names} models:")
+    print(f"Original order: {' < '.join([g_names[index] for index in original_order])}")
+    computeMonteCarloSwitchedProbability(dict_data, g_names)
+    computeBootstrapSwitchedProbability(dict_data, g_names)
+
+
 
 
 """
     Given a set of data, computes the amount of repetitions a model should be trained to get
-    a better result than the one a 5% top (of real data). Based on a MonteCarlo simulation
-    based on the approximated distribution
+    a better result than the one a 5% top (of real data). Based on the approximated normal
+    distribution to the given data
 """
-def computeMonteCarloBetterResultSampleSize(g1_data, g1_name, n_samples = montecarlo_samples):
-    percentile = 98
-    g1_mean = np.mean(g1_data)
-    g1_std = np.std(g1_data)
-    
-    percentile_95 = np.percentile(g1_data, percentile)
-    sample_size_list = []
-    for _ in range(int(n_samples/100)):
-        n = 0
-        while True:
-            observation = np.random.normal(g1_mean, g1_std, 1)
-            if observation > percentile_95:
-                sample_size_list.append(n)
-                break
-            n+=1
+def computeNormalDistBetterResultSampleSize(data, percentile):
 
-    sample_size = np.mean(sample_size_list)
-
-    accumulated_prob = stats.norm.cdf(percentile_95, loc=g1_mean, scale=g1_std) 
+    g_mean = np.mean(data)
+    g_std = np.std(data)
+    percentile_value = np.percentile(data, percentile)
+    accumulated_prob = stats.norm.cdf(percentile_value, loc=g_mean, scale=g_std) 
     probability_in_normal_dist = 1 - accumulated_prob
+    
+    n_samples = accumulated_prob/probability_in_normal_dist
+    print(f"\t[NormalDist] Samples computed: {n_samples:.4f}      ({probability_in_normal_dist*100:.4f} probability in aproximated normal distribution)")
 
-    print(f"\t[] To get a value as {percentile_95} (percentile {percentile} of {g1_name} data), or higher, you would need ({probability_in_normal_dist*100} probability in aproximated normal distribution):")
-    print(f"\t[MonteCarlo] Samples computed: {sample_size}")
-    print(f"\t[ReglaDeTres] Samples computed: {accumulated_prob/probability_in_normal_dist}")
 
+
+"""
+    Given a set of data, computes the amount of repetitions a model should be trained to get
+    a better result than the one a 5% top (of real data). Based on the approximated normal
+    distribution to the given data
+"""
+def computeBootstrapBetterResultSampleSize(data, percentile, n_samples = bootstrap_samples):
+    
+    percentile_value = np.percentile(data, percentile)
+
+    n_iterations_boosttrap = []
+    for _ in range(n_samples):
+        n_iterations_boosttrap.append(0)
+        while True:
+            observation = np.random.choice(np.random.choice(data, size=len(data), replace=True))
+
+            if observation > percentile_value:
+                break
+
+            n_iterations_boosttrap[-1]+=1
+                
+    train_iterations = np.mean(n_iterations_boosttrap)
+    train_iterations_std = np.std(n_iterations_boosttrap)
+
+    print(f"\t[Bootstrap] Samples computed: {train_iterations:.4f} (std {train_iterations_std:.4f})")
+
+
+"""
+    Wrap function to compute train iterations to get a result better than the percentile of provided data
+    both using approximated normal distribution and bootstrap approach
+"""
+def computeBetterResultSampleSize(dict_data, g_names, percentile = 96):
+    for name in g_names:
+        percentile_value = np.percentile(dict_data[name], percentile)
+        print(f"Analysis of train size for {name}, to get value > {percentile_value:.4f} (percentile {percentile} of data), you would need:")
+        computeNormalDistBetterResultSampleSize(dict_data[name], percentile)
+        computeBootstrapBetterResultSampleSize(dict_data[name], percentile)
 
 if __name__ == "__main__":
     metrics_data = getAllModelData()
@@ -104,13 +157,7 @@ if __name__ == "__main__":
         print(f"\t· [{model}] samples: {len(accuracy_data[model])}")
     # print(f"Accuracy data filtered: {accuracy_data}")
 
-    ### Probability
-    print("Analysis for HiddenLayerPerceptron and DNN_6L models:")
-    g1_data = accuracy_data['HiddenLayerPerceptron']
-    g2_data = accuracy_data['DNN_6L']
+    computeBetterResultSampleSize(accuracy_data, ['SimplePerceptron'])
 
-    computeMonteCarloSwitchedProbability(g1_data, g2_data,'HiddenLayerPerceptron','DNN_6L')
-    computeBootstrapSwitchedProbability(g1_data, g2_data,'HiddenLayerPerceptron','DNN_6L')
-
-    print("Analysis of sample size for SimplePerceptron:")
-    computeMonteCarloBetterResultSampleSize(accuracy_data['SimplePerceptron'],'SimplePerceptron')
+    computeSwtichedProbability(accuracy_data, ['HiddenLayerPerceptron','DNN_6L'])
+    computeSwtichedProbability(accuracy_data, ['CNN_2L', 'CNN_4L', 'CNN_5L','CNN_13L'])
