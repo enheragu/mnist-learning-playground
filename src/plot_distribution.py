@@ -8,7 +8,7 @@ import tabulate
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
-from scipy.stats import norm
+from scipy.stats import norm, shapiro, kurtosis
 
 from utils.yaml_utils import getMetricsLogFile 
 from main import output_path
@@ -178,11 +178,32 @@ def plotSamplingError(metrics_data):
     plt.xlabel('Sample Size (N)')
 
     # plt.xscale('log')
-    plt.grid(visible=True, color=c_grey, linestyle='--', linewidth=0.5, alpha=0.8)
+    plt.grid(visible=True, color=c_grey, linestyle='--', linewidth=0.5, alpha=0.7)
     plt.legend()
     plt.tight_layout()
 
     print("\nSummary Table of Sampling Errors (%):")
+    print(tabulate.tabulate(row_data, headers="firstrow", tablefmt="fancy_grid"))
+
+"""
+    Checks the normality of each distribution with:
+    - Kurtosis with Fisher definition (close to 0 is normal)
+    - Skewness (median-mean correspondance)
+    - The Shapiro-Wilk test: https://es.wikipedia.org/wiki/Prueba_de_Shapiro-Wilk
+"""
+def normalityTest(metrics_data):
+    accuracy_data = {}
+    print("Data available is:")
+    for model, data in metrics_data.items():
+        accuracy_data[model] = [entry['accuracy']*100 for entry in metrics_data[model].values()]
+        
+    row_data = [['Model', 'Median', 'Mean', 'Kurtosis (Fisher)', 'Shapiro-Wilk: W', 'Shapiro-Wilk: p-value']]
+    for model_name, data in accuracy_data.items():  
+        estadistico, p_valor = shapiro(data) 
+        kurt = kurtosis(data, fisher=True) 
+        row_data.append([model_name, np.median(data), np.mean(data), kurt, estadistico, p_valor])
+
+    print("\nSummary Table of Shapiro-Wilk normality test:")
     print(tabulate.tabulate(row_data, headers="firstrow", tablefmt="fancy_grid"))
 
 if __name__ == "__main__":
@@ -203,6 +224,7 @@ if __name__ == "__main__":
                                color_palette_list])
         # plotParamAmplitudeRelation(metrics_data)
         plotSamplingError(metrics_data)
+        normalityTest(metrics_data)
     else:
         print("No models found or no metrics to plot.")
     plt.show()
