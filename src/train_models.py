@@ -12,6 +12,7 @@ from torchvision import datasets, transforms
 
 from utils.yaml_utils import updateMetricsLogFile
 from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_13L, CNN_2L, CNN_4L, CNN_5L
+from models.BatchSizeStudy import CNN_13L_B10, CNN_13L_B25, CNN_13L_B50, CNN_13L_B80
 
 # How many train loops are executed to study its variance
 train_loops = 800
@@ -22,20 +23,22 @@ output_path = os.path.join(current_dir_path,"../output_data")
 # General configuration
 input_size = 28 * 28  # Tamaño de cada imagen aplanada
 num_classes = 10  # Números del 0 al 9
-batch_size = 64
 learning_rate = 0.001
 patience = 10
 num_epochs = 500
 
 
 # Dict with how many iterations to be performed with each model
-model_iterations = {CNN_2L: 10,
-              CNN_4L: 200,
-              CNN_5L: 10,
-              CNN_13L: 10,             # no-dropout -> https://arxiv.org/pdf/1608.06037
-              DNN_6L: 10,
-              HiddenLayerPerceptron: 10,
-              SimplePerceptron: 10}
+model_iterations = {CNN_2L: 15,
+              CNN_4L: 15,
+              CNN_5L: 15,
+              CNN_13L: 15,             # no-dropout -> https://arxiv.org/pdf/1608.06037
+              DNN_6L: 15,
+              HiddenLayerPerceptron: 15,
+              SimplePerceptron: 15,
+              CNN_13L_B10: 100, 
+              CNN_13L_B25: 100, 
+              CNN_13L_B50: 100}
 
 
 
@@ -72,12 +75,12 @@ if __name__ == "__main__":
                 train_dataset = datasets.MNIST(root='./data', train=True, transform=transform, download=True)
                 test_dataset = datasets.MNIST(root='./data', train=False, transform=transform, download=True)
 
-                train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-                test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
-
                 # Init model, loss and optimizer
                 model = ModelClass(input_size=input_size, num_classes=num_classes, learning_rate=learning_rate, patience=patience, seed=seed, output_path=output_path)
                 model.save_architecture()
+
+                train_loader = DataLoader(dataset=train_dataset, batch_size=model.batch_size, shuffle=True)
+                test_loader = DataLoader(dataset=test_dataset, batch_size=model.batch_size, shuffle=False)
 
                 metrics = model.spinTrainEval(train_loader, test_loader, num_epochs = num_epochs)
                 updateMetricsLogFile(metrics, os.path.join(model.output_data_path,f"{'sameseed_' if sameseed else 'randomseed_'}training_metrics.yaml"))

@@ -26,9 +26,10 @@ class BaseModelTrainer(nn.Module):
         self.patience = patience
         self.to(self.device)
 
-        
         self.model_name = type(self).__name__
         self.base_output_path = output_path
+
+        self.batch_size = 64
 
         if self.base_output_path is not None:
             self.output_data_path = os.path.join(self.base_output_path, self.model_name)
