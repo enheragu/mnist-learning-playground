@@ -30,16 +30,16 @@ num_epochs = 500
 
 
 # Dict with how many iterations to be performed with each model
-model_iterations = {# CNN_2L: 15,
-                    # CNN_4L: 15,
-                    # CNN_5L: 15,
-                    # CNN_13L: 15,             # no-dropout -> https://arxiv.org/pdf/1608.06037
-                    # DNN_6L: 15,
-                    # HiddenLayerPerceptron: 15,
-                    # SimplePerceptron: 15,
-                    CNN_13L_B10: 100, 
-                    CNN_13L_B25: 100, 
-                    CNN_13L_B50: 100}
+model_iterations = {CNN_2L: 15,
+                    CNN_4L: 15,
+                    CNN_5L: 15,
+                    CNN_13L: 15,             # no-dropout -> https://arxiv.org/pdf/1608.06037
+                    DNN_6L: 15,
+                    HiddenLayerPerceptron: 15,
+                    SimplePerceptron: 15,
+                    CNN_13L_B10: 130, 
+                    CNN_13L_B25: 130, 
+                    CNN_13L_B50: 130}
 
 
 
