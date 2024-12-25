@@ -5,6 +5,7 @@ import os
 import yaml
 
 from utils.file_lock import FileLock
+from utils.log_utils import log
 
 # Check if all values in the dictionary/list are of basic types
 def is_basic_types(values):
@@ -25,9 +26,6 @@ def represent_list(dumper, data):
     else:
         return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=False)
 
-
-
-
 def updateMetricsLogFile(metrics, file_path="training_metrics.yaml"):
     lock_file = f"{file_path}.lock"
 
@@ -47,8 +45,7 @@ def updateMetricsLogFile(metrics, file_path="training_metrics.yaml"):
             yaml.add_representer(dict, represent_dict)
             yaml.dump(all_metrics, file, default_flow_style=False, allow_unicode=True, indent=4, width=5000)
 
-
-        print(f"Updated metrics file in: {file_path}")
+        log(f"Updated metrics file in: {file_path}")
 
 
 def getMetricsLogFile(file_path="training_metrics.yaml"):
@@ -59,5 +56,5 @@ def getMetricsLogFile(file_path="training_metrics.yaml"):
             with open(file_path, "r") as file:
                 all_metrics = yaml.safe_load(file) or {}
                 return all_metrics
-    print(f"[Error] File not found: {file_path}")
+    log(f"[Error] File not found: {file_path}")
     return {}

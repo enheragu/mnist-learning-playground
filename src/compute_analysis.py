@@ -7,6 +7,8 @@ import scipy.stats as stats
 
 from plot_distribution import getAllModelData
 
+from utils.log_utils import log
+
 montecarlo_samples = 500000 # Slow version :) -> 1000000
 bootstrap_samples = 50000 # Slow version :) -> 100000
 
@@ -38,9 +40,9 @@ def computeMonteCarloSwitchedProbability(dict_data = {'group1': [1,3], 'group2':
     
     switched_probability = switched_count / n_samples
     
-    print(f"\t[MonteCarlo] {n_samples = }")
-    print(f"\t[MonteCarlo] p(!original-order) = {switched_probability:.4f}")
-    print(f"\t[MonteCarlo] p(original-order) = {1-switched_probability:.4f}")
+    log(f"\t[MonteCarlo] {n_samples = }")
+    log(f"\t[MonteCarlo] p(!original-order) = {switched_probability:.4f}")
+    log(f"\t[MonteCarlo] p(original-order) = {1-switched_probability:.4f}")
     return switched_probability
 
 
@@ -71,9 +73,9 @@ def computeBootstrapSwitchedProbability(dict_data = {'group1': [1,3], 'group2': 
 
     switched_probability = switched_count / n_samples
 
-    print(f"\t[Bootstrap] {n_samples = }")
-    print(f"\t[Bootstrap] p(!original-order) = {switched_probability:.4f}")
-    print(f"\t[Bootstrap] p(original-order) = {1-switched_probability:.4f}")
+    log(f"\t[Bootstrap] {n_samples = }")
+    log(f"\t[Bootstrap] p(!original-order) = {switched_probability:.4f}")
+    log(f"\t[Bootstrap] p(original-order) = {1-switched_probability:.4f}")
     return switched_probability
 
 """
@@ -84,8 +86,8 @@ def computeSwtichedProbability(dict_data, g_names):
     max_list = [np.max(dict_data[name]) for name in g_names]
     original_order = np.argsort(max_list) # Get index that sort the array min to max
     
-    print(f"Analysis of switched probability for {g_names} models:")
-    print(f"Original order: {' < '.join([g_names[index] for index in original_order])}")
+    log(f"Analysis of switched probability for {g_names} models:")
+    log(f"Original order: {' < '.join([g_names[index] for index in original_order])}")
     computeMonteCarloSwitchedProbability(dict_data, g_names)
     computeBootstrapSwitchedProbability(dict_data, g_names)
 
@@ -106,7 +108,7 @@ def computeNormalDistBetterResultSampleSize(data, percentile):
     probability_in_normal_dist = 1 - accumulated_prob
     
     n_samples = accumulated_prob/probability_in_normal_dist
-    print(f"\t[NormalDist] Samples computed: {n_samples:.4f}      ({probability_in_normal_dist*100:.4f} probability in aproximated normal distribution)")
+    log(f"\t[NormalDist] Samples computed: {n_samples:.4f}      ({probability_in_normal_dist*100:.4f} probability in aproximated normal distribution)")
 
 
 
@@ -133,7 +135,7 @@ def computeBootstrapBetterResultSampleSize(data, percentile, n_samples = bootstr
     train_iterations = np.mean(n_iterations_boosttrap)
     train_iterations_std = np.std(n_iterations_boosttrap)
 
-    print(f"\t[Bootstrap] Samples computed: {train_iterations:.4f} (std {train_iterations_std:.4f})")
+    log(f"\t[Bootstrap] Samples computed: {train_iterations:.4f} (std {train_iterations_std:.4f})")
 
 
 """
@@ -143,7 +145,7 @@ def computeBootstrapBetterResultSampleSize(data, percentile, n_samples = bootstr
 def computeBetterResultSampleSize(dict_data, g_names, percentile = 96):
     for name in g_names:
         percentile_value = np.percentile(dict_data[name], percentile)
-        print(f"Analysis of train size for {name}, to get value > {percentile_value:.4f} (percentile {percentile} of data), you would need:")
+        log(f"Analysis of train size for {name}, to get value > {percentile_value:.4f} (percentile {percentile} of data), you would need:")
         computeNormalDistBetterResultSampleSize(dict_data[name], percentile)
         computeBootstrapBetterResultSampleSize(dict_data[name], percentile)
 
@@ -151,11 +153,11 @@ if __name__ == "__main__":
     metrics_data = getAllModelData()
 
     accuracy_data = {}
-    print("Data available is:")
+    log("Data available is:")
     for model, data in metrics_data.items():
         accuracy_data[model] = [entry['accuracy']*100 for entry in metrics_data[model].values()]
-        print(f"\t· [{model}] samples: {len(accuracy_data[model])}")
-    # print(f"Accuracy data filtered: {accuracy_data}")
+        log(f"\t· [{model}] samples: {len(accuracy_data[model])}")
+    # log(f"Accuracy data filtered: {accuracy_data}")
 
     computeBetterResultSampleSize(accuracy_data, ['SimplePerceptron'])
 

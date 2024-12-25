@@ -6,6 +6,7 @@ import torch.nn as nn
 
 from models.BaseModel import BaseModelTrainer
 
+from utils.log_utils import log
 
 class HiddenLayerPerceptron(BaseModelTrainer):
     def __init__(self, input_size, num_classes, learning_rate=0.001, patience=10, seed=42, output_path=""):
@@ -15,7 +16,7 @@ class HiddenLayerPerceptron(BaseModelTrainer):
         self.fc2 = nn.Linear(800, num_classes).to(self.device)
         
         self._initialize_weights(seed)
-        print(f"[{self.model_name}] Initialization of model complete, get into training process.")
+        log(f"[{self.model_name}] Initialization of model complete, get into training process.")
 
     def forward(self, x):
         # Aplanar la imagen 28x28 a un vector de tamaño 784

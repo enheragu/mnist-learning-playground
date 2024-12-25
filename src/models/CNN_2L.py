@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 from models.BaseModel import BaseModelTrainer
 
+from utils.log_utils import log
+
 # Model from: https://arxiv.org/pdf/2008.10400
 # C1 from Figure 8
 class CNN_2L(BaseModelTrainer):
@@ -34,7 +36,7 @@ class CNN_2L(BaseModelTrainer):
         ).to(self.device)
 
         self._initialize_weights(seed)
-        print(f"[{self.model_name}] Initialization of model complete, get into training process.")
+        log(f"[{self.model_name}] Initialization of model complete, get into training process.")
 
     def forward(self, x):
         x = self.conv_layers(x)

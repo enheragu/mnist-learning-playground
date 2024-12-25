@@ -6,6 +6,8 @@ import torch.nn as nn
 
 from models.BaseModel import BaseModelTrainer
 
+from utils.log_utils import log
+
 class SimplePerceptron(BaseModelTrainer):
     def __init__(self, input_size, num_classes, learning_rate=0.001, patience=10, seed=42, output_path=""):
         super(SimplePerceptron, self).__init__(input_size, num_classes, learning_rate, patience, output_path=output_path)
@@ -13,7 +15,7 @@ class SimplePerceptron(BaseModelTrainer):
         self.fc1 = nn.Linear(input_size, num_classes).to(self.device)
         self._initialize_weights(seed)
 
-        print(f"[{self.model_name}] Initialization of model complete, get into training process.")
+        log(f"[{self.model_name}] Initialization of model complete, get into training process.")
 
     def forward(self, x):
         x = x.view(-1, 28 * 28)  # Aplanamos la imagen 28x28 a un vector de tamaño 784

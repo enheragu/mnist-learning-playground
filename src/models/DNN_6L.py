@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 from models.BaseModel import BaseModelTrainer
 
+from utils.log_utils import log
+
 class DNN_6L(BaseModelTrainer):
     def __init__(self, input_size, num_classes, learning_rate=0.001, patience=10, seed=42, output_path=""):
         super(DNN_6L, self).__init__(input_size, num_classes, learning_rate, patience, output_path=output_path)
@@ -18,7 +20,7 @@ class DNN_6L(BaseModelTrainer):
         self.fc6 = nn.Linear(500, num_classes).to(self.device)   # Output layer
 
         self._initialize_weights(seed)
-        print(f"[{self.model_name}] Initialization of model complete, get into training process.")
+        log(f"[{self.model_name}] Initialization of model complete, get into training process.")
 
     def forward(self, x):
         # Aplanar la entrada (784)

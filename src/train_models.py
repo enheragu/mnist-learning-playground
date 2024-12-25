@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
 
+from utils.log_utils import log
 from utils.yaml_utils import updateMetricsLogFile
 from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_13L, CNN_2L, CNN_4L, CNN_5L
 from models.BatchSizeStudy import CNN_13L_B10, CNN_13L_B25, CNN_13L_B50, CNN_13L_B80
@@ -29,16 +30,16 @@ num_epochs = 500
 
 
 # Dict with how many iterations to be performed with each model
-model_iterations = {CNN_2L: 15,
-              CNN_4L: 15,
-              CNN_5L: 15,
-              CNN_13L: 15,             # no-dropout -> https://arxiv.org/pdf/1608.06037
-              DNN_6L: 15,
-              HiddenLayerPerceptron: 15,
-              SimplePerceptron: 15,
-              CNN_13L_B10: 100, 
-              CNN_13L_B25: 100, 
-              CNN_13L_B50: 100}
+model_iterations = {# CNN_2L: 15,
+                    # CNN_4L: 15,
+                    # CNN_5L: 15,
+                    # CNN_13L: 15,             # no-dropout -> https://arxiv.org/pdf/1608.06037
+                    # DNN_6L: 15,
+                    # HiddenLayerPerceptron: 15,
+                    # SimplePerceptron: 15,
+                    CNN_13L_B10: 100, 
+                    CNN_13L_B25: 100, 
+                    CNN_13L_B50: 100}
 
 
 
@@ -67,7 +68,7 @@ if __name__ == "__main__":
                 if not sameseed:
                     seed = random.randint(0, 2**32 - 1)  # Random 32 bits number
 
-                print(f"[{type(ModelClass).__name__}] Iteration: {iteration}/{num_iter}")
+                log(f"[{ModelClass.__name__}] Iteration: {iteration}/{num_iter}")
                 set_seed(seed)
 
                 # Cargar el dataset MNIST

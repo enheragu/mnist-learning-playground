@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 from models.BaseModel import BaseModelTrainer
 
+from utils.log_utils import log
+
 
 # Model from: https://github.com/Coderx7/SimpleNet/blob/master/SimpNet_V1/Models/NoDropout/train_test.prototxt
 class CNN_13L(BaseModelTrainer):
@@ -90,7 +92,7 @@ class CNN_13L(BaseModelTrainer):
         ).to(self.device)
 
         self._initialize_weights(seed)
-        print(f"[{self.model_name}] Initialization of model complete, get into training process.")
+        log(f"[{self.model_name}] Initialization of model complete, get into training process.")
 
     def forward(self, x):
         x = self.conv_layers(x)

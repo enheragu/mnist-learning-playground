@@ -11,8 +11,10 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm, shapiro, kurtosis
 
 from utils.yaml_utils import getMetricsLogFile 
-from main import output_path
+from utils.log_utils import log
+from train_models import output_path
 
+analysis_path = './analysis_results'
 bin_size = 20
 
 ## Custom color definitions
@@ -42,9 +44,9 @@ def getAllModelData():
                 # Load metrics data for the model
                 metrics_data[model_name] = getMetricsLogFile(metrics_file)
             else:
-                print(f"No metrics file found for model: {model_name}")
+                log(f"No metrics file found for model: {model_name}")
         else:
-            print(f"{model_name} is not a directory, skipping...")
+            log(f"{model_name} is not a directory, skipping...")
         
     return metrics_data
 
@@ -61,7 +63,7 @@ def plot_metric_distribution(metrics_data, train_duration_data, metric_label = '
         train_duration_str = f"{int(train_duration // 60)}min {train_duration % 60:.2f}s"
         color = next(color_iterator)
 
-        sns.histplot(data_y, bins=bin_size, stat="density", alpha=0.5, label=f"{model_name}   (n = {len(data_y)})   (mean train: {train_duration_str})",
+        sns.histplot(data_y, bins=bin_size, stat="density", alpha=0.5, label=f"{model_name}   (n = {len(data_y)})", #   (mean train: {train_duration_str})",
                      color=color, edgecolor='none', ax=ax)
 
         # Ajuste de la distribución normal para el modelo
@@ -81,6 +83,8 @@ def plot_metric_distribution(metrics_data, train_duration_data, metric_label = '
 
     plt.tight_layout()
 
+    plt.savefig(os.path.join(analysis_path,f"{'_'.join(list(metrics_data.keys()))}_{metric_label.replace(' (%)','').replace(' (s)','')}.png"))
+
 """
     Intermediate function to handle each distribution plot wanted
 """
@@ -97,7 +101,7 @@ def plotDataDistribution(metrics_data, models_plot_list = [['all']], color_list 
                 accuracy_data[model] = [entry['accuracy']*100 for entry in metrics_data[model].values()]
                 train_duration_data[model] = [entry['train_duration'] for entry in metrics_data[model].values()]
 
-        # plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'train_duration (s)')
+        plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'train_duration (s)')
         plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'accuracy (%)')
     # plt.show()
 
@@ -107,7 +111,7 @@ def plotDataDistribution(metrics_data, models_plot_list = [['all']], color_list 
 """
 def plotParamAmplitudeRelation(metrics_data):
     import models
-    from main import input_size, num_classes, learning_rate, patience
+    from train_models import input_size, num_classes, learning_rate, patience
 
     y = []
     x = []
@@ -135,6 +139,7 @@ def plotParamAmplitudeRelation(metrics_data):
 
     # Mostrar la gráfica
     plt.grid(True)
+    plt.savefig(os.path.join(analysis_path,f"amplitude_relation.png"))
 
 
 """
@@ -144,7 +149,7 @@ def plotSamplingError(metrics_data):
     sample_sizes = np.arange(1, 101)  # Tamaño de muestra de 1 a 100
 
     accuracy_data = {}
-    print("Data available is:")
+    log("Data available is:")
     for model, data in metrics_data.items():
         accuracy_data[model] = [entry['accuracy']*100 for entry in metrics_data[model].values()]
         
@@ -181,9 +186,10 @@ def plotSamplingError(metrics_data):
     plt.grid(visible=True, color=c_grey, linestyle='--', linewidth=0.5, alpha=0.7)
     plt.legend()
     plt.tight_layout()
+    plt.savefig(os.path.join(analysis_path,f"sampling_error.png"))
 
-    print("\nSummary Table of Sampling Errors (%):")
-    print(tabulate.tabulate(row_data, headers="firstrow", tablefmt="fancy_grid"))
+    log("\nSummary Table of Sampling Errors (%):")
+    log(tabulate.tabulate(row_data, headers="firstrow", tablefmt="fancy_grid"))
 
 """
     Checks the normality of each distribution with:
@@ -193,7 +199,7 @@ def plotSamplingError(metrics_data):
 """
 def normalityTest(metrics_data):
     accuracy_data = {}
-    print("Data available is:")
+    log("Data available is:")
     for model, data in metrics_data.items():
         accuracy_data[model] = [entry['accuracy']*100 for entry in metrics_data[model].values()]
         
@@ -203,14 +209,36 @@ def normalityTest(metrics_data):
         kurt = kurtosis(data, fisher=True) 
         row_data.append([model_name, np.median(data), np.mean(data), kurt, estadistico, p_valor])
 
-    print("\nSummary Table of Shapiro-Wilk normality test:")
-    print(tabulate.tabulate(row_data, headers="firstrow", tablefmt="fancy_grid"))
+    log("\nSummary Table of Shapiro-Wilk normality test:")
+    log(tabulate.tabulate(row_data, headers="firstrow", tablefmt="fancy_grid"))
+
+
+"""
+    Computes max amplitude
+"""
+def maxAmplitude(metrics_data):
+    accuracy_data = {}
+    log("Data available is:")
+    for model, data in metrics_data.items():
+        accuracy_data[model] = [entry['accuracy']*100 for entry in metrics_data[model].values()]
+        
+    row_data = [['Model', 'min', 'max', 'Amplitude']]
+    for model_name, data in accuracy_data.items():
+        row_data.append([model_name, np.min(data), np.max(data), np.max(data)-np.min(data)])
+
+    log("\nSummary Table of Shapiro-Wilk normality test:")
+    log(tabulate.tabulate(row_data, headers="firstrow", tablefmt="fancy_grid"))
+
+
 
 if __name__ == "__main__":
+    os.makedirs(analysis_path, exist_ok=True)
+    plt.rcParams.update({'font.size': 18})
     metrics_data = getAllModelData()
 
     all_models = metrics_data.keys()
-    print(f"Model availability: {all_models}")
+    log(f"Model availability: {all_models}")
+    # log(f"{metrics_data = }")
     
     # Once all models' metrics have been gathered, plot the distributions
     if metrics_data:
@@ -225,6 +253,7 @@ if __name__ == "__main__":
         # plotParamAmplitudeRelation(metrics_data)
         plotSamplingError(metrics_data)
         normalityTest(metrics_data)
+        maxAmplitude(metrics_data)
     else:
-        print("No models found or no metrics to plot.")
+        log("No models found or no metrics to plot.")
     plt.show()

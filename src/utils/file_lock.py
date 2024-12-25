@@ -2,10 +2,11 @@ import os
 import fcntl
 import time
 
+from utils.log_utils import log
+
 class FileLock:
     def __init__(self, filename):
         self.filename = filename
-        
         self.acquire()
         
     def acquire(self):
@@ -13,7 +14,7 @@ class FileLock:
         while os.path.exists(self.filename):
             time.sleep(0.5)
             
-        # print('[FileLock::acquire]')
+        # log('[FileLock::acquire]')
         file = open(self.filename, "w")
         file.write(":)")
         file.close()
@@ -28,7 +29,7 @@ class FileLock:
         self.release()
         
     def release(self):
-        # print('[FileLock::release] - Released lock and closed file')
+        # log('[FileLock::release] - Released lock and closed file')
         if os.path.exists(self.filename):
             os.remove(self.filename)
         
