@@ -162,4 +162,4 @@ if __name__ == "__main__":
     computeBetterResultSampleSize(accuracy_data, ['SimplePerceptron'])
 
     computeSwtichedProbability(accuracy_data, ['HiddenLayerPerceptron','DNN_6L'])
-    computeSwtichedProbability(accuracy_data, ['CNN_2L', 'CNN_4L', 'CNN_5L','CNN_13L'])
+    computeSwtichedProbability(accuracy_data, ['_3L', 'CNN_4L', 'CNN_5L','CNN_14L'])

@@ -12,8 +12,8 @@ from torchvision import datasets, transforms
 
 from utils.log_utils import log
 from utils.yaml_utils import updateMetricsLogFile
-from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_13L, CNN_2L, CNN_4L, CNN_5L
-from models.BatchSizeStudy import CNN_13L_B10, CNN_13L_B25, CNN_13L_B50, CNN_13L_B80
+from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, _3L, CNN_4L, CNN_5L
+from models.BatchSizeStudy import CNN_14L_B10, CNN_14L_B25, CNN_14L_B50, CNN_14L_B80
 
 # How many train loops are executed to study its variance
 train_loops = 800
@@ -22,25 +22,24 @@ current_dir_path = os.path.dirname(os.path.abspath(__file__))
 output_path = os.path.join(current_dir_path,"../output_data")
 
 # General configuration
-input_size = 28 * 28  # Tamaño de cada imagen aplanada
-num_classes = 10  # Números del 0 al 9
+input_size = 28 * 28  # Size of each image flattened
+num_classes = 10  # Numbers from 0 to 9
 learning_rate = 0.001
 patience = 10
 num_epochs = 500
 
 
 # Dict with how many iterations to be performed with each model
-model_iterations = {CNN_2L: 15,
+model_iterations = {_3L: 15,
                     CNN_4L: 15,
                     CNN_5L: 15,
-                    CNN_13L: 15,             # no-dropout -> https://arxiv.org/pdf/1608.06037
+                    CNN_14L: 15,             # no-dropout -> https://arxiv.org/pdf/1608.06037
                     DNN_6L: 15,
                     HiddenLayerPerceptron: 15,
                     SimplePerceptron: 15,
-                    CNN_13L_B10: 130, 
-                    CNN_13L_B25: 130, 
-                    CNN_13L_B50: 130}
-
+                    CNN_14L_B10: 130, 
+                    CNN_14L_B25: 130, 
+                    CNN_14L_B50: 130}
 
 
 def set_seed(seed=42):
@@ -53,11 +52,9 @@ def set_seed(seed=42):
     torch.backends.cudnn.benchmark = False  # No optimiza los algoritmos si las dimensiones no cambian
 
 
-
 if __name__ == "__main__":
     seed = 0
     metrics = []
-
 
     max_iterations = max(model_iterations.values())
     
@@ -71,7 +68,7 @@ if __name__ == "__main__":
                 log(f"[{ModelClass.__name__}] Iteration: {iteration}/{num_iter}")
                 set_seed(seed)
 
-                # Cargar el dataset MNIST
+                # Load MNIST dataset
                 transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
                 train_dataset = datasets.MNIST(root='./data', train=True, transform=transform, download=True)
                 test_dataset = datasets.MNIST(root='./data', train=False, transform=transform, download=True)

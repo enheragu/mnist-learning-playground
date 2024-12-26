@@ -14,6 +14,9 @@ from utils.yaml_utils import getMetricsLogFile
 from utils.log_utils import log
 from train_models import output_path
 
+# Whether to plot or just store images in disk
+only_store = True
+
 analysis_path = './analysis_results'
 bin_size = 20
 
@@ -83,7 +86,7 @@ def plot_metric_distribution(metrics_data, train_duration_data, metric_label = '
 
     plt.tight_layout()
 
-    plt.savefig(os.path.join(analysis_path,f"{'_'.join(list(metrics_data.keys()))}_{metric_label.replace(' (%)','').replace(' (s)','')}.png"))
+    plt.savefig(os.path.join(analysis_path,f"{metric_label.replace(' (%)','').replace(' (s)','').replace(' ','_').lower()}_{'_'.join(list(metrics_data.keys()))}.png"))
 
 """
     Intermediate function to handle each distribution plot wanted
@@ -95,14 +98,19 @@ def plotDataDistribution(metrics_data, models_plot_list = [['all']], color_list 
         color_palette_list = color_scheme
 
         train_duration_data = {}
+        best_epoch_data = {}
         accuracy_data = {}
         for model, data in metrics_data.items():
             if plot == 'all' or model in plot:
                 accuracy_data[model] = [entry['accuracy']*100 for entry in metrics_data[model].values()]
                 train_duration_data[model] = [entry['train_duration'] for entry in metrics_data[model].values()]
+                best_epoch_data[model] = [entry['best_epoch'] for entry in metrics_data[model].values()]
 
-        plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'train_duration (s)')
-        plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'accuracy (%)')
+        plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch')
+        plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)')
+        plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'Accuracy (%)')
+
+        
     # plt.show()
 
 """
@@ -244,7 +252,7 @@ if __name__ == "__main__":
     if metrics_data:
         plotDataDistribution(metrics_data,[['SimplePerceptron'],
                                ['DNN_6L', 'HiddenLayerPerceptron'],
-                               ['CNN_5L', 'CNN_2L', 'CNN_13L', 'CNN_4L'],
+                               ['CNN_5L', '_3L', 'CNN_14L', 'CNN_4L'],
                                all_models],
                               [[c_green],
                                [c_blue,c_darkgrey],
@@ -256,4 +264,6 @@ if __name__ == "__main__":
         maxAmplitude(metrics_data)
     else:
         log("No models found or no metrics to plot.")
-    plt.show()
+    
+    if not only_store:
+        plt.show()
