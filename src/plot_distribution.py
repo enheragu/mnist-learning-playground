@@ -7,7 +7,7 @@ import itertools
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
-from scipy.stats import norm, shapiro, kurtosis
+from scipy.stats import norm, gamma, shapiro, kurtosis
 
 from utils.yaml_utils import getMetricsLogFile 
 from utils.log_utils import log, logTable
@@ -52,10 +52,32 @@ def getAllModelData():
         
     return metrics_data
 
+def plot_metric_normaldistribution(data_y, ax, color):
+    # Ajuste de la distribución normal para el modelo
+    mean = np.mean(data_y)
+    std = np.std(data_y)
+    if std > 0.000001:
+        x = np.linspace(mean - std * 4, mean + std * 4, 100)
+        y = norm.pdf(x, mean, std)
+        sns.lineplot(x=x, y=y, linestyle='--', linewidth=2, color=color, ax=ax)
+        for pos in np.arange(mean - std * 3, mean + std * 3, std):
+            ax.vlines(x=pos, ymin=0, ymax=norm.pdf(pos, mean, std), colors=color, linewidth=1, linestyles='solid')
+
+def plot_metric_gammadistribution(data_y, ax, color):
+    # Ajuste de la distribución gamma para el modelo
+    shape, loc, scale = gamma.fit(data_y, floc=0)
+    x = np.linspace(0, shape * scale * 3, 100)
+    y = gamma.pdf(x, shape, loc, scale)
+
+    sns.lineplot(x=x, y=y, linestyle='--', linewidth=2, color=color, ax=ax)
+    for pos in np.arange(min(data_y), max(data_y), (max(data_y)-min(data_y))/10):
+        ax.vlines(x=pos, ymin=0, ymax=gamma.pdf(pos, shape, loc, scale), colors=color, linewidth=1, linestyles='solid')
+
+
 """
     Plots theoretical normal distribution based on given data, and plots binned distribution or real data
 """
-def plot_metric_distribution(metrics_data, train_duration_data, metric_label = 'accuracy (%)'):
+def plot_metric_distribution(metrics_data, train_duration_data, metric_label = 'accuracy (%)', plot_func = plot_metric_normaldistribution):
     
     fig, ax = plt.subplots(figsize=(12, 9))
     color_iterator = itertools.cycle(color_palette_list)
@@ -68,15 +90,7 @@ def plot_metric_distribution(metrics_data, train_duration_data, metric_label = '
         sns.histplot(data_y, bins=bin_size, stat="density", alpha=0.5, label=f"{model_name}   (n = {len(data_y)})", #   (mean train: {train_duration_str})",
                      color=color, edgecolor='none', ax=ax)
 
-        # Ajuste de la distribución normal para el modelo
-        mean = np.mean(data_y)
-        std = np.std(data_y)
-        if std > 0.000001:
-            x = np.linspace(mean - std * 4, mean + std * 4, 100)
-            y = norm.pdf(x, mean, std)
-            sns.lineplot(x=x, y=y, linestyle='--', linewidth=2, color=color, ax=ax)
-            for pos in np.arange(mean - std * 3, mean + std * 3, std):
-                ax.vlines(x=pos, ymin=0, ymax=norm.pdf(pos, mean, std), colors=color, linewidth=1, linestyles='solid')
+        plot_func(data_y, ax, color)
 
     ax.set_title(f"{metric_label} distribution")
     ax.set_xlabel(metric_label)
@@ -105,8 +119,8 @@ def plotDataDistribution(metrics_data, models_plot_list = [['all']], color_list 
                 train_duration_data[model] = [entry['train_duration'] for entry in metrics_data[model].values()]
                 best_epoch_data[model] = [entry['best_epoch'] for entry in metrics_data[model].values()]
 
-        plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch')
-        plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)')
+        plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch', plot_func=plot_metric_gammadistribution)
+        plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)', plot_func=plot_metric_gammadistribution)
         plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'Accuracy (%)')
 
         
@@ -152,33 +166,33 @@ def plotParamAmplitudeRelation(metrics_data):
 """
     Just plots the sampling error for each model against sample size
 """
-def plotSamplingError(metrics_data):
+def plotSamplingError(metrics_data, metric = 'accuracy'):
     sample_sizes = np.arange(1, 101)  # Tamaño de muestra de 1 a 100
 
-    accuracy_data = {}
+    metric_data = {}
     log("Data available is:")
     for model, data in metrics_data.items():
-        accuracy_data[model] = [entry['accuracy']*100 for entry in metrics_data[model].values()]
+        metric_data[model] = [entry[metric]*100 for entry in metrics_data[model].values()]
         
 
     fig, ax = plt.subplots(figsize=(12, 9))
     color_iterator = itertools.cycle(color_palette_list)
     eq = r'Sampling Error = $\sigma/\sqrt{n}$'
 
-    row_data = [['Model', '1 Sample', '5 Samples', '10 Samples', '25 Samples', '50 Samples', '100 Samples']]
-    for model_name, data in accuracy_data.items():        
+    row_data = [['Model', '1 Sample (%)', '5 Samples (%)', '10 Samples (%)', '25 Samples (%)', '50 Samples (%)', '100 Samples (%)']]
+    for model_name, data in metric_data.items():        
         g_std = np.std(data)
         errors = g_std / np.sqrt(sample_sizes)
         plt.plot(sample_sizes, errors, label=f'{model_name}', color=next(color_iterator), linewidth=2)
         
         row_data.append([
             model_name, 
-            f"{errors[0]:.3f} %",   # Error for 1 observation
-            f"{errors[4]:.3f} %",   # Error for 5 observations
-            f"{errors[9]:.3f} %",   # Error for 10 observations
-            f"{errors[24]:.3f} %",   # Error for 25 observations
-            f"{errors[49]:.3f} %",   # Error for 50 observations
-            f"{errors[99]:.3f} %"   # Error for 100 observations
+            f"{errors[0]:.3f}",   # Error for 1 observation
+            f"{errors[4]:.3f}",   # Error for 5 observations
+            f"{errors[9]:.3f}",   # Error for 10 observations
+            f"{errors[24]:.3f}",   # Error for 25 observations
+            f"{errors[49]:.3f}",   # Error for 50 observations
+            f"{errors[99]:.3f}"   # Error for 100 observations
         ])
 
     x_center = (ax.get_xlim()[0] + ax.get_xlim()[1]) * 0.5
@@ -195,8 +209,8 @@ def plotSamplingError(metrics_data):
     plt.tight_layout()
     plt.savefig(os.path.join(analysis_path,f"sampling_error.png"))
 
-    log("\nSummary Table of Sampling Errors (%):")
-    logTable(row_data, analysis_path, "Sampling Errors", colalign=['left', 'right', 'right', 'right', 'right', 'right', 'right'])
+    log(f"\nSummary Table of {metric.title()} Sampling Errors (%):")
+    logTable(row_data, analysis_path, f"{metric.title()} Sampling Errors", colalign=['left', 'right', 'right', 'right', 'right', 'right', 'right'])
 
 """
     Checks the normality of each distribution with:
@@ -204,37 +218,64 @@ def plotSamplingError(metrics_data):
     - Skewness (median-mean correspondance)
     - The Shapiro-Wilk test: https://es.wikipedia.org/wiki/Prueba_de_Shapiro-Wilk
 """
-def normalityTest(metrics_data):
-    accuracy_data = {}
+def normalityTest(metrics_data, metric = 'accuracy'):
+    metric_data = {}
     log("Data available is:")
     for model, data in metrics_data.items():
-        accuracy_data[model] = [entry['accuracy']*100 for entry in metrics_data[model].values()]
+        metric_data[model] = [entry[metric]*100 for entry in metrics_data[model].values()]
         
-    row_data = [['Model', 'Median', 'Mean', 'Kurtosis (Fisher)', 'Shapiro-Wilk: W', 'Shapiro-Wilk: p-value']]
-    for model_name, data in accuracy_data.items():  
+    row_data = [['Model', 'Median (%)', 'Mean (%)', 'Kurtosis (Fisher)', 'Shapiro-Wilk: W', 'Shapiro-Wilk: p-value (%)']]
+    for model_name, data in metric_data.items():  
         estadistico, p_valor = shapiro(data) 
         kurt = kurtosis(data, fisher=True) 
-        row_data.append([model_name, f"{np.median(data):.3f} %", f"{np.mean(data):.3f} %", f"{kurt:.4f}", f"{estadistico:.4f}", f"{p_valor:.4f} %"])
+        row_data.append([model_name, f"{np.median(data):.3f}", f"{np.mean(data):.3f}", f"{kurt:.4f}", f"{estadistico:.4f}", f"{p_valor:.4f}"])
 
-    log("\nSummary Table of Shapiro-Wilk normality test:")
-    logTable(row_data, analysis_path, "Normality test", colalign=['left', 'right', 'right', 'right', 'right', 'right'])
+    log(f"\nSummary Table of {metric.title()} Shapiro-Wilk normality test:")
+    logTable(row_data, analysis_path, f"{metric.title()} Normality test", colalign=['left', 'right', 'right', 'right', 'right', 'right'])
 
+
+def normal_amplitude(data):
+    mean = np.mean(data)
+    std = np.std(data)
+    
+    percentile_0_5 = norm.ppf(0.001, loc=mean, scale=std)
+    percentile_99_5 = norm.ppf(0.999, loc=mean, scale=std)
+    amplitude_99 = percentile_99_5 - percentile_0_5
+    return amplitude_99
+
+
+def gamma_amplitude(data):
+    k, loc, scale = gamma.fit(data, floc=0)
+    
+    percentile_0_5 = gamma.ppf(0.001, k, loc, scale)
+    percentile_99_5 = gamma.ppf(0.999, k, loc, scale)
+    amplitude_99 = percentile_99_5 - percentile_0_5
+    return amplitude_99
 
 """
     Computes max amplitude
 """
-def maxAmplitude(metrics_data):
-    accuracy_data = {}
+def maxAmplitude(metrics_data, metric='accuracy', unit=" (%)", format='.3f', amplitude_function = normal_amplitude):
+    metric_data = {}
     log("Data available is:")
     for model, data in metrics_data.items():
-        accuracy_data[model] = [entry['accuracy']*100 for entry in metrics_data[model].values()]
+        metric_data[model] = [entry[metric]*100 for entry in metrics_data[model].values()]
         
-    row_data = [['Model', 'min', 'max', 'Amplitude']]
-    for model_name, data in accuracy_data.items():
-        row_data.append([model_name, f"{np.min(data):.3f} %", f"{np.max(data):.3f} %", f"{np.max(data)-np.min(data):.3f} %"])
+    row_data = [['Model', f'min{unit}', f'max{unit}', f'Data Amplitude{unit}', f'Amplitude 99.9% Interval Distribution{unit}']]
+    for model_name, data in metric_data.items():
+        
+        amplitude_distribution = normal_amplitude(data)
+        row_data.append([model_name, 
+                         f"{np.min(data):{format}}", 
+                         f"{np.max(data):{format}}", 
+                         f"{np.max(data)-np.min(data):{format}}", 
+                         f"{amplitude_distribution:{format}}"])
+    
+    row_data_sorted = sorted(row_data[1:], key=lambda x: float(x[4].replace(f"{unit}", "")), reverse=True)
+    row_data_sorted.insert(0, row_data[0])  # Agregar la fila de encabezado al inicio
 
-    log("\nSummary max amplitude:")
-    logTable(row_data, analysis_path, "Max amplitude", colalign=['left', 'right', 'right', 'right'])
+    log(f"\nSummary {metric.title()} max amplitude:")
+    logTable(row_data_sorted, analysis_path, f"{metric.title()} Max amplitude", colalign=['left', 'right', 'right', 'right'])
 
 
 
@@ -261,6 +302,9 @@ if __name__ == "__main__":
         plotSamplingError(metrics_data)
         normalityTest(metrics_data)
         maxAmplitude(metrics_data)
+        
+        maxAmplitude(metrics_data, 'train_duration', unit=' (s)', format='.1f', amplitude_function=gamma_amplitude)
+        maxAmplitude(metrics_data, 'best_epoch', unit='', format='.0f', amplitude_function=gamma_amplitude)
     else:
         log("No models found or no metrics to plot.")
     
