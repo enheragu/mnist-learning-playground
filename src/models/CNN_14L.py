@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from models.BaseModel import BaseModelTrainer
 
-from utils.log_utils import log
+from utils.log_utils import log, logTable
 
 
 # Model from: https://github.com/Coderx7/SimpleNet/blob/master/SimpNet_V1/Models/NoDropout/train_test.prototxt

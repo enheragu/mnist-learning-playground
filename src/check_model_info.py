@@ -4,11 +4,12 @@ import torch
 import torch.nn as nn
 from torchsummary import summary
 
-from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, _3L, CNN_4L, CNN_5L
+from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L
 
-from utils.log_utils import log
+from utils.log_utils import log, logTable
+from train_models import output_path
 
-analysis_path = './analysis_results'
+analysis_path = './analysis_results/model_info'
 input_size = 28*28
 
 ## Custom color definitions
@@ -125,8 +126,8 @@ def generate_mermaid_diagram(model, input_size):
 if __name__ == "__main__":
 
     os.makedirs(analysis_path, exist_ok=True)
-    for Model in [SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, _3L, CNN_4L, CNN_5L]:
-        model = Model(input_size=input_size, num_classes=10)
+    for Model in [SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L]:
+        model = Model(input_size=input_size, num_classes=10, output_path=output_path)
         log(f"Summary of {model.model_name} model with input size {input_size} for 10 classes classification:")
         summary(model, input_size=(1, 28, 28))  # Tamaño de entrada: (canales, alto, ancho)
 

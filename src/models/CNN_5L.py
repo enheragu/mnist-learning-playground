@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from models.BaseModel import BaseModelTrainer
 
-from utils.log_utils import log
+from utils.log_utils import log, logTable
 
 # Model from: https://arxiv.org/pdf/2008.10400
 # C3 from Figure 8

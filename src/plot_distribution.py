@@ -3,7 +3,6 @@
 
 import os
 import itertools
-import tabulate
 
 import numpy as np
 import seaborn as sns
@@ -11,13 +10,13 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm, shapiro, kurtosis
 
 from utils.yaml_utils import getMetricsLogFile 
-from utils.log_utils import log
+from utils.log_utils import log, logTable
 from train_models import output_path
 
 # Whether to plot or just store images in disk
 only_store = True
 
-analysis_path = './analysis_results'
+analysis_path = './analysis_results/distributions'
 bin_size = 20
 
 ## Custom color definitions
@@ -174,12 +173,12 @@ def plotSamplingError(metrics_data):
         
         row_data.append([
             model_name, 
-            f"{errors[0]:.3f}",   # Error for 1 observation
-            f"{errors[4]:.3f}",   # Error for 5 observations
-            f"{errors[9]:.3f}",   # Error for 10 observations
-            f"{errors[24]:.3f}",   # Error for 25 observations
-            f"{errors[49]:.3f}",   # Error for 50 observations
-            f"{errors[99]:.3f}"   # Error for 100 observations
+            f"{errors[0]:.3f} %",   # Error for 1 observation
+            f"{errors[4]:.3f} %",   # Error for 5 observations
+            f"{errors[9]:.3f} %",   # Error for 10 observations
+            f"{errors[24]:.3f} %",   # Error for 25 observations
+            f"{errors[49]:.3f} %",   # Error for 50 observations
+            f"{errors[99]:.3f} %"   # Error for 100 observations
         ])
 
     x_center = (ax.get_xlim()[0] + ax.get_xlim()[1]) * 0.5
@@ -197,7 +196,7 @@ def plotSamplingError(metrics_data):
     plt.savefig(os.path.join(analysis_path,f"sampling_error.png"))
 
     log("\nSummary Table of Sampling Errors (%):")
-    log(tabulate.tabulate(row_data, headers="firstrow", tablefmt="fancy_grid"))
+    logTable(row_data, analysis_path, "Sampling Errors", colalign=['left', 'right', 'right', 'right', 'right', 'right', 'right'])
 
 """
     Checks the normality of each distribution with:
@@ -215,10 +214,10 @@ def normalityTest(metrics_data):
     for model_name, data in accuracy_data.items():  
         estadistico, p_valor = shapiro(data) 
         kurt = kurtosis(data, fisher=True) 
-        row_data.append([model_name, np.median(data), np.mean(data), kurt, estadistico, p_valor])
+        row_data.append([model_name, f"{np.median(data):.3f} %", f"{np.mean(data):.3f} %", f"{kurt:.4f}", f"{estadistico:.4f}", f"{p_valor:.4f} %"])
 
     log("\nSummary Table of Shapiro-Wilk normality test:")
-    log(tabulate.tabulate(row_data, headers="firstrow", tablefmt="fancy_grid"))
+    logTable(row_data, analysis_path, "Normality test", colalign=['left', 'right', 'right', 'right', 'right', 'right'])
 
 
 """
@@ -232,10 +231,10 @@ def maxAmplitude(metrics_data):
         
     row_data = [['Model', 'min', 'max', 'Amplitude']]
     for model_name, data in accuracy_data.items():
-        row_data.append([model_name, np.min(data), np.max(data), np.max(data)-np.min(data)])
+        row_data.append([model_name, f"{np.min(data):.3f} %", f"{np.max(data):.3f} %", f"{np.max(data)-np.min(data):.3f} %"])
 
-    log("\nSummary Table of Shapiro-Wilk normality test:")
-    log(tabulate.tabulate(row_data, headers="firstrow", tablefmt="fancy_grid"))
+    log("\nSummary max amplitude:")
+    logTable(row_data, analysis_path, "Max amplitude", colalign=['left', 'right', 'right', 'right'])
 
 
 
@@ -252,7 +251,7 @@ if __name__ == "__main__":
     if metrics_data:
         plotDataDistribution(metrics_data,[['SimplePerceptron'],
                                ['DNN_6L', 'HiddenLayerPerceptron'],
-                               ['CNN_5L', '_3L', 'CNN_14L', 'CNN_4L'],
+                               ['CNN_5L', 'CNN_3L', 'CNN_14L', 'CNN_4L'],
                                all_models],
                               [[c_green],
                                [c_blue,c_darkgrey],

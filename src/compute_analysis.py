@@ -7,7 +7,7 @@ import scipy.stats as stats
 
 from plot_distribution import getAllModelData
 
-from utils.log_utils import log
+from utils.log_utils import log, logTable
 
 montecarlo_samples = 500000 # Slow version :) -> 1000000
 bootstrap_samples = 50000 # Slow version :) -> 100000
@@ -162,4 +162,4 @@ if __name__ == "__main__":
     computeBetterResultSampleSize(accuracy_data, ['SimplePerceptron'])
 
     computeSwtichedProbability(accuracy_data, ['HiddenLayerPerceptron','DNN_6L'])
-    computeSwtichedProbability(accuracy_data, ['_3L', 'CNN_4L', 'CNN_5L','CNN_14L'])
+    computeSwtichedProbability(accuracy_data, ['CNN_3L', 'CNN_4L', 'CNN_5L','CNN_14L'])

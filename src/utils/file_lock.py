@@ -2,7 +2,7 @@ import os
 import fcntl
 import time
 
-from utils.log_utils import log
+from utils.log_utils import log, logTable
 
 class FileLock:
     def __init__(self, filename):

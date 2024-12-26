@@ -16,7 +16,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 from sklearn.metrics import classification_report, confusion_matrix
 
 from utils.yaml_utils import updateMetricsLogFile
-from utils.log_utils import log
+from utils.log_utils import log, logTable
 
 class BaseModelTrainer(nn.Module):
     def __init__(self, input_size, num_classes, learning_rate=0.001, patience=10, device=None, output_path = ""):

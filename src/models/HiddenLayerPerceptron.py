@@ -6,7 +6,7 @@ import torch.nn as nn
 
 from models.BaseModel import BaseModelTrainer
 
-from utils.log_utils import log
+from utils.log_utils import log, logTable
 
 class HiddenLayerPerceptron(BaseModelTrainer):
     def __init__(self, input_size, num_classes, learning_rate=0.001, patience=10, seed=42, output_path=""):

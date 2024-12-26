@@ -10,9 +10,9 @@ from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
 
-from utils.log_utils import log
+from utils.log_utils import log, logTable
 from utils.yaml_utils import updateMetricsLogFile
-from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, _3L, CNN_4L, CNN_5L
+from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L
 from models.BatchSizeStudy import CNN_14L_B10, CNN_14L_B25, CNN_14L_B50, CNN_14L_B80
 
 # How many train loops are executed to study its variance
@@ -30,7 +30,7 @@ num_epochs = 500
 
 
 # Dict with how many iterations to be performed with each model
-model_iterations = {_3L: 15,
+model_iterations = {CNN_3L: 15,
                     CNN_4L: 15,
                     CNN_5L: 15,
                     CNN_14L: 15,             # no-dropout -> https://arxiv.org/pdf/1608.06037

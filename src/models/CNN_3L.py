@@ -5,13 +5,13 @@ import torch
 import torch.nn as nn
 from models.BaseModel import BaseModelTrainer
 
-from utils.log_utils import log
+from utils.log_utils import log, logTable
 
 # Model from: https://arxiv.org/pdf/2008.10400
 # C1 from Figure 8
-class _3L(BaseModelTrainer):
+class CNN_3L(BaseModelTrainer):
     def __init__(self, input_size, num_classes=10, learning_rate=0.001, patience=10, seed=42, output_path="", input_channels=1):
-        super(_3L, self).__init__(input_size=None, num_classes=num_classes, learning_rate=learning_rate, patience=patience, output_path=output_path)
+        super(CNN_3L, self).__init__(input_size=None, num_classes=num_classes, learning_rate=learning_rate, patience=patience, output_path=output_path)
         
         # Definir las capas convolucionales
         self.conv_layers = nn.Sequential(
