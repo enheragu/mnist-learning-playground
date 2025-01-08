@@ -6,8 +6,8 @@ import torch
 import torch.nn as nn
 from torchsummary import summary
 
-from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L
-
+from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L, BatchNormMaxoutNetInNet
+from models.BatchNormMaxoutNetInNet import MINBlock, MaxOutLayer
 from utils.log_utils import log, logTable
 from train_models import output_path
 
@@ -39,13 +39,16 @@ color_palette_list = [c_blue,c_green,c_yellow,c_red,c_purple,c_grey,c_darkgrey]
 def generate_mermaid_diagram(model, input_size):
 
     layers = [["input_image", 'Input Image (28x28, 1ch)', ':::noBox']]
-    def process_layers(model):
+    def process_layers(model, model_name=''):
         for name, layer in model.named_children():
             layer_type = layer.__class__.__name__
+            layer_tag = f"{layer_type}_{name}{model_name}"
             if isinstance(layer, nn.Sequential):
-                process_layers(layer)
+                process_layers(layer, model_name=f"_{layer_tag}")
+            elif isinstance(layer, MINBlock):
+                process_layers(layer, model_name=f"_{layer_tag}")
             elif isinstance(layer, nn.Conv2d):
-                layers.append([f"{layer_type}_{name}",f"<b>{layer_type}</b>({layer.kernel_size}, {layer.out_channels}ch)", ':::blockStyle'])
+                layers.append([f"{layer_tag}",f"<b>{layer_type}</b>({layer.kernel_size}, {layer.out_channels}ch)", ':::blockStyle'])
             elif isinstance(layer, nn.BatchNorm2d):
                 layers[-1][1] += f"; <b>{layer_type}</b>({layer.num_features})"
             elif isinstance(layer, nn.BatchNorm1d):
@@ -53,14 +56,20 @@ def generate_mermaid_diagram(model, input_size):
             elif isinstance(layer, nn.ReLU):
                 layers[-1][1] += f"; <b>{layer_type}</b>"
             elif isinstance(layer, nn.MaxPool2d):
-                layers.append([f"{layer_type}_{name}",f"<b>{layer_type}</b>({layer.kernel_size})", ':::blockStyle'])
+                layers.append([f"{layer_tag}",f"<b>{layer_type}</b>({layer.kernel_size})", ':::blockStyle'])
             elif isinstance(layer, nn.Flatten):
                 # layers.append([f"{layer_type}_{name}",f"{layer_type}"])
                 pass
             elif isinstance(layer, nn.Linear):
-                layers.append([f"{layer_type}_{name}",f"<b>{layer_type}</b>({layer.in_features}, {layer.out_features})", ':::blockStyle'])
+                layers.append([f"{layer_tag}",f"<b>{layer_type}</b>({layer.in_features}, {layer.out_features})", ':::blockStyle'])
+            elif isinstance(layer, MaxOutLayer):
+                layers.append([f"{layer_tag}",f"<b>{layer_type}</b>({layer.in_features}, {layer.out_features}; k={layer.num_pieces})", ':::blockStyle'])
+            elif isinstance(layer, nn.AvgPool2d):
+                layers.append([f"{layer_tag}",f"<b>{layer_type}</b>({layer.kernel_size}; s:{layer.stride}, p={layer.padding})", ':::blockStyle'])
+            elif isinstance(layer, nn.Dropout):
+                layers.append([f"{layer_tag}",f"<b>{layer_type}</b>({layer.p})", ':::blockStyle'])
             else:
-                log(f"--- ERROR - {layer}")
+                log(f"--- [generate_mermaid_diagram] ERROR - {layer}")
     process_layers(model)
     layers.append(['output', 'Output (10)', ':::noBox'])
     # log(f"{model.model_name} layers:\n{layers}")
@@ -84,6 +93,7 @@ def generate_mermaid_diagram(model, input_size):
             i += 1     
 
     diagram = "graph TD\n"
+    diagram += f"    title {model.model_name}\n"
     
     for layer in grouped_layers:
         if isinstance(layer, tuple):
@@ -128,11 +138,10 @@ def generate_mermaid_diagram(model, input_size):
 if __name__ == "__main__":
 
     os.makedirs(analysis_path, exist_ok=True)
-    for Model in [SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L]:
+    for Model in [SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L, BatchNormMaxoutNetInNet]:
         model = Model(input_size=input_size, num_classes=10, output_path=output_path)
         log(f"Summary of {model.model_name} model with input size {input_size} for 10 classes classification:")
         summary(model, input_size=(1, 28, 28))  # Tamaño de entrada: (canales, alto, ancho)
-
 
         diagram = generate_mermaid_diagram(model, (1, 28, 28))
 
