@@ -42,14 +42,3 @@ class CNN_3L(BaseModelTrainer):
         x = self.conv_layers(x)
         x = self.fc_layers(x)
         return x
-
-    def _initialize_weights(self, seed):
-        """Inicializa los pesos de manera fija."""
-        torch.manual_seed(seed)
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
-

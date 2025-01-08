@@ -12,7 +12,7 @@ from torchvision import datasets, transforms
 
 from utils.log_utils import log, logTable
 from utils.yaml_utils import updateMetricsLogFile
-from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L
+from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L, BatchNormMaxoutNetInNet
 from models.BatchSizeStudy import CNN_14L_B10, CNN_14L_B25, CNN_14L_B50, CNN_14L_B80
 
 # How many train loops are executed to study its variance
@@ -37,6 +37,7 @@ model_iterations = {CNN_3L: 15,
                     DNN_6L: 15,
                     HiddenLayerPerceptron: 15,
                     SimplePerceptron: 15,
+                    BatchNormMaxoutNetInNet: 130,
                     CNN_14L_B10: 130, 
                     CNN_14L_B25: 130, 
                     CNN_14L_B50: 130}

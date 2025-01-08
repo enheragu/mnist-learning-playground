@@ -42,18 +42,8 @@ class DNN_6L(BaseModelTrainer):
         torch.manual_seed(seed)  # Asegura que la inicialización de pesos sea consistente
         
         # Inicializar pesos para cada capa
-        nn.init.uniform_(self.fc1.weight, a=-0.1, b=0.1)
-        nn.init.uniform_(self.fc2.weight, a=-0.1, b=0.1)
-        nn.init.uniform_(self.fc3.weight, a=-0.1, b=0.1)
-        nn.init.uniform_(self.fc4.weight, a=-0.1, b=0.1)
-        nn.init.uniform_(self.fc5.weight, a=-0.1, b=0.1)
-        nn.init.uniform_(self.fc6.weight, a=-0.1, b=0.1)
-        
-        # Inicializar sesgos
-        if self.fc1.bias is not None:
-            nn.init.zeros_(self.fc1.bias)
-            nn.init.zeros_(self.fc2.bias)
-            nn.init.zeros_(self.fc3.bias)
-            nn.init.zeros_(self.fc4.bias)
-            nn.init.zeros_(self.fc5.bias)
-            nn.init.zeros_(self.fc6.bias)
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.uniform_(module.weight, a=-0.1, b=0.1)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)

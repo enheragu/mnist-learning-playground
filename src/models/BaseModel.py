@@ -192,3 +192,29 @@ class BaseModelTrainer(nn.Module):
         
         metrics.update({'best_epoch': best_epoch, 'train_duration': train_duration, 'total_epochs': best_epoch+self.patience, 'accuracy_plot': self.accuracy_each_epoch})
         return {timestamp: metrics}
+    
+    """
+        Initialize each layer of a given model
+        
+        - Para capas lineales y convolucionales: inicialización uniforme.
+        - Para capas recurrentes: inicialización xavier normal.
+        - Los sesgos se inicializan en cero si existen.
+    """
+    def _initialize_weights(self, seed=42):
+        torch.manual_seed(seed)
+        
+        for module in self.modules():
+            if isinstance(module, (nn.Linear, nn.Conv2d)):
+                nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
+            elif isinstance(module, nn.LSTM) or isinstance(module, nn.GRU):
+                for name, param in module.named_parameters():
+                    if "weight" in name:
+                        nn.init.xavier_normal_(param)
+                    elif "bias" in name:
+                        nn.init.zeros_(param)
+            elif isinstance(module, nn.BatchNorm2d) or isinstance(module, nn.BatchNorm1d):
+                nn.init.constant_(module.weight,1)
+                nn.init.constant_(module.bias,0)
+

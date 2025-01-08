@@ -31,11 +31,8 @@ class HiddenLayerPerceptron(BaseModelTrainer):
         torch.manual_seed(seed)  # Asegura que la inicialización de pesos sea consistente
         
         # Inicializar pesos de fc1
-        nn.init.uniform_(self.fc1.weight, a=-0.1, b=0.1)
-        if self.fc1.bias is not None:
-            nn.init.zeros_(self.fc1.bias)
-        
-        # Inicializar pesos de fc2
-        nn.init.uniform_(self.fc2.weight, a=-0.1, b=0.1)
-        if self.fc2.bias is not None:
-            nn.init.zeros_(self.fc2.bias)
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.uniform_(module.weight, a=-0.1, b=0.1)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
