@@ -28,8 +28,8 @@ c_purple = "#a66497"
 c_grey = "#769393"
 c_darkgrey = "#2a2b2e"
 
-color_palette_list = [c_blue,c_green,c_yellow,c_red,c_purple,c_grey,c_darkgrey]
-
+color_palette_list = [c_blue,c_yellow,c_red,c_green,c_purple,c_grey,c_darkgrey]
+# color_palette_list = [c_green,c_blue,c_darkgrey,c_yellow, c_red, c_purple, c_grey]
 
 def getAllModelData():
     metrics_file_name = "randomseed_training_metrics.yaml"
@@ -61,7 +61,9 @@ def plot_metric_normaldistribution(data_y, ax, color):
         y = norm.pdf(x, mean, std)
         sns.lineplot(x=x, y=y, linestyle='--', linewidth=2, color=color, ax=ax)
         for pos in np.arange(mean - std * 3, mean + std * 3, std):
-            ax.vlines(x=pos, ymin=0, ymax=norm.pdf(pos, mean, std), colors=color, linewidth=1, linestyles='solid')
+            linewidth = 1 if abs(pos-mean) >= 0.01 else 2
+            linestyle = ':' if abs(pos-mean) >= 0.01 else 'solid'
+            ax.vlines(x=pos, ymin=0, ymax=norm.pdf(pos, mean, std), colors=color, linewidth=linewidth, linestyles=linestyle)
 
 def plot_metric_gammadistribution(data_y, ax, color):
     # Ajuste de la distribución gamma para el modelo
@@ -70,24 +72,28 @@ def plot_metric_gammadistribution(data_y, ax, color):
     y = gamma.pdf(x, shape, loc, scale)
 
     sns.lineplot(x=x, y=y, linestyle='--', linewidth=2, color=color, ax=ax)
-    for pos in np.arange(min(data_y), max(data_y), (max(data_y)-min(data_y))/10):
-        ax.vlines(x=pos, ymin=0, ymax=gamma.pdf(pos, shape, loc, scale), colors=color, linewidth=1, linestyles='solid')
+
+    for pos in [0.05,0.25,0.5,0.750,0.95]:
+        pos_percentile = gamma.ppf(pos, shape, loc, scale)
+        linewidth = 1 if pos != 0.5 else 2
+        linestyle = ':' if pos != 0.5 else 'solid'
+        ax.vlines(x=pos_percentile, ymin=0, ymax=gamma.pdf(pos_percentile, shape, loc, scale), colors=color, linewidth=linewidth, linestyles=linestyle)
 
 
 """
     Plots theoretical normal distribution based on given data, and plots binned distribution or real data
 """
-def plot_metric_distribution(metrics_data, train_duration_data, metric_label = 'accuracy (%)', plot_func = plot_metric_normaldistribution):
+def plot_metric_distribution(metrics_data, train_duration_data, metric_label = 'accuracy (%)', plot_func = plot_metric_normaldistribution, color_palette = color_palette_list):
     
     fig, ax = plt.subplots(figsize=(12, 9))
-    color_iterator = itertools.cycle(color_palette_list)
+    color_iterator = itertools.cycle(color_palette)
 
     for model_name, data_y in metrics_data.items():
         train_duration = np.mean(train_duration_data[model_name])
         train_duration_str = f"{int(train_duration // 60)}min {train_duration % 60:.2f}s"
         color = next(color_iterator)
 
-        sns.histplot(data_y, bins=bin_size, stat="density", alpha=0.5, label=f"{model_name}   (n = {len(data_y)})", #   (mean train: {train_duration_str})",
+        sns.histplot(data_y, bins=bin_size, stat="density", alpha=0.4, label=f"{model_name}   (n = {len(data_y)})", #   (mean train: {train_duration_str})",
                      color=color, edgecolor='none', ax=ax)
 
         plot_func(data_y, ax, color)
@@ -99,7 +105,10 @@ def plot_metric_distribution(metrics_data, train_duration_data, metric_label = '
 
     plt.tight_layout()
 
-    plt.savefig(os.path.join(analysis_path,f"{metric_label.replace(' (%)','').replace(' (s)','').replace(' ','_').lower()}_{'_'.join(list(metrics_data.keys()))}.png"))
+    plt.savefig(os.path.join(analysis_path,f"plot_{metric_label.replace(' (%)','').replace(' (s)','').replace(' ','_').lower()}_{'_'.join(list(metrics_data.keys()))}.png"))
+
+    if only_store:
+        plt.close()
 
 """
     Intermediate function to handle each distribution plot wanted
@@ -107,9 +116,17 @@ def plot_metric_distribution(metrics_data, train_duration_data, metric_label = '
 def plotDataDistribution(metrics_data, models_plot_list = [['all']], color_list = color_palette_list):
     global color_palette_list
     
-    for plot, color_scheme in zip(models_plot_list, color_list):
-        color_palette_list = color_scheme
+    # Plot all models in single plot
+    for index, (model, data) in enumerate(metrics_data.items()):
+        accuracy_data = {model: [entry['accuracy']*100 for entry in metrics_data[model].values()]}
+        train_duration_data = {model: [entry['train_duration'] for entry in metrics_data[model].values()]}
+        best_epoch_data = {model: [entry['best_epoch'] for entry in metrics_data[model].values()]}
 
+        plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch', plot_func=plot_metric_gammadistribution, color_palette=[color_palette_list[index]])
+        plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)', plot_func=plot_metric_gammadistribution, color_palette=[color_palette_list[index]])
+        plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'Accuracy (%)', color_palette=[color_palette_list[index]])
+
+    for plot, color_scheme in zip(models_plot_list, color_list):
         train_duration_data = {}
         best_epoch_data = {}
         accuracy_data = {}
@@ -119,10 +136,9 @@ def plotDataDistribution(metrics_data, models_plot_list = [['all']], color_list 
                 train_duration_data[model] = [entry['train_duration'] for entry in metrics_data[model].values()]
                 best_epoch_data[model] = [entry['best_epoch'] for entry in metrics_data[model].values()]
 
-        plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch', plot_func=plot_metric_gammadistribution)
-        plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)', plot_func=plot_metric_gammadistribution)
-        plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'Accuracy (%)')
-
+        plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch', plot_func=plot_metric_gammadistribution, color_palette=color_scheme)
+        plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)', plot_func=plot_metric_gammadistribution, color_palette=color_scheme)
+        plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'Accuracy (%)', color_palette=color_scheme)
         
     # plt.show()
 
@@ -162,6 +178,8 @@ def plotParamAmplitudeRelation(metrics_data):
     plt.grid(True)
     plt.savefig(os.path.join(analysis_path,f"amplitude_relation.png"))
 
+    if only_store:
+        plt.close()
 
 """
     Just plots the sampling error for each model against sample size
@@ -211,6 +229,9 @@ def plotSamplingError(metrics_data, metric = 'accuracy'):
 
     log(f"\nSummary Table of {metric.title()} Sampling Errors (%):")
     logTable(row_data, analysis_path, f"{metric.title()} Sampling Errors", colalign=['left', 'right', 'right', 'right', 'right', 'right', 'right'])
+
+    if only_store:
+        plt.close()
 
 """
     Checks the normality of each distribution with:
