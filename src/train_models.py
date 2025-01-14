@@ -30,17 +30,17 @@ num_epochs = 500
 
 
 # Dict with how many iterations to be performed with each model
-model_iterations = {CNN_3L: 15,
+model_iterations = {BatchNormMaxoutNetInNet: 130,
+                    CNN_14L_B10: 130, 
+                    CNN_14L_B25: 130, 
+                    CNN_14L_B50: 130,
+                    CNN_3L: 15,
                     CNN_4L: 15,
                     CNN_5L: 15,
                     CNN_14L: 15,             # no-dropout -> https://arxiv.org/pdf/1608.06037
                     DNN_6L: 15,
                     HiddenLayerPerceptron: 15,
-                    SimplePerceptron: 15,
-                    BatchNormMaxoutNetInNet: 130,
-                    CNN_14L_B10: 130, 
-                    CNN_14L_B25: 130, 
-                    CNN_14L_B50: 130}
+                    SimplePerceptron: 15}
 
 
 def set_seed(seed=42):

@@ -111,9 +111,9 @@ class BaseModelTrainer(nn.Module):
                 all_labels.extend(labels.cpu().numpy())
         accuracy = accuracy_score(all_labels, all_preds)
 
-        precision = precision_score(all_labels, all_preds, average='weighted')
-        recall = recall_score(all_labels, all_preds, average='weighted')
-        f1 = f1_score(all_labels, all_preds, average="weighted", zero_division=0)
+        # precision = precision_score(all_labels, all_preds, average='weighted')
+        # recall = recall_score(all_labels, all_preds, average='weighted')
+        # f1 = f1_score(all_labels, all_preds, average="weighted", zero_division=0)
 
         metrics = {
             "accuracy": accuracy.tolist()
@@ -190,7 +190,11 @@ class BaseModelTrainer(nn.Module):
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + f".{datetime.now().microsecond // 1000:03d}"
         
-        metrics.update({'best_epoch': best_epoch, 'train_duration': train_duration, 'total_epochs': best_epoch+self.patience, 'accuracy_plot': self.accuracy_each_epoch})
+        metrics.update({'best_epoch': best_epoch, 
+                        'train_duration': train_duration, 
+                        'total_epochs': best_epoch+self.patience, 
+                        'accuracy_plot': self.accuracy_each_epoch,
+                        'seed': self.seed})
         return {timestamp: metrics}
     
     """
@@ -201,6 +205,7 @@ class BaseModelTrainer(nn.Module):
         - Los sesgos se inicializan en cero si existen.
     """
     def _initialize_weights(self, seed=42):
+        self.seed = seed
         torch.manual_seed(seed)
         
         for module in self.modules():
