@@ -38,6 +38,7 @@ class DNN_6L(BaseModelTrainer):
         return x
 
     def _initialize_weights(self, seed):
+        self.seed = seed
         """Inicializa los pesos de cada capa de manera uniforme."""
         torch.manual_seed(seed)  # Asegura que la inicialización de pesos sea consistente
         

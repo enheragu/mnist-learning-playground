@@ -23,6 +23,7 @@ class SimplePerceptron(BaseModelTrainer):
 
     def _initialize_weights(self,seed):
         """Inicializa los pesos de manera fija."""
+        self.seed = seed
         torch.manual_seed(seed)  # Asegura que la inicialización de pesos sea consistente
         nn.init.uniform_(self.fc1.weight, a=-0.1, b=0.1)  # Ejemplo de inicialización uniforme
         if self.fc1.bias is not None:

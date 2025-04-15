@@ -52,7 +52,7 @@ class BaseModelTrainer(nn.Module):
         epochs_without_improvement = 0
         best_accuracy = 0.0
 
-        with tqdm(range(num_epochs), desc=f"Train {self.model_name}", unit="epoch") as pbar:
+        with tqdm(range(num_epochs), desc=f"{self.model_name}", unit="epoch") as pbar:
             for epoch in pbar:
                 start_time = time.time()
                 self.train()
