@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 # encoding: utf-8
 
+"""
+    Evaluates a set of models for a given number of train trials
+"""
+
 import os
 import sys 
 import re
 import random
 import traceback 
-import numpy as np
 
-import torch
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
 
 from utils.log_utils import log, logTable
 from utils.yaml_utils import updateMetricsLogFile, getMetricsLogFile
+from utils.set_seed import set_seed
 from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L, BatchNormMaxoutNetInNet
 from models.BatchSizeStudy import CNN_14L_B10, CNN_14L_B25, CNN_14L_B50, CNN_14L_B80
 
@@ -46,16 +49,6 @@ model_iterations = {BatchNormMaxoutNetInNet: 400,
                     DNN_6L: 400,
                     HiddenLayerPerceptron: 400,
                     SimplePerceptron: 400}
-
-
-def set_seed(seed=42):
-    """Establece la semilla para todas las librerías relevantes."""
-    torch.manual_seed(seed)  # Para PyTorch
-    np.random.seed(seed)  # Para NumPy
-    torch.cuda.manual_seed(seed)  # Para PyTorch en GPU
-    torch.cuda.manual_seed_all(seed)  # Para todos los dispositivos GPU
-    torch.backends.cudnn.deterministic = True  # Garantiza la determinación del algoritmo de cuDNN
-    torch.backends.cudnn.benchmark = False  # No optimiza los algoritmos si las dimensiones no cambian
 
 
 if __name__ == "__main__":

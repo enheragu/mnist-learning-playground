@@ -6,6 +6,27 @@ import os
 from tqdm import tqdm
 import tabulate
 
+## Custom color definitions
+c_blue = "#0171ba"
+c_green = "#78b01c"
+c_yellow = "#f6ae2d"
+c_red = "#f23535" 
+c_purple = "#a66497"
+c_grey = "#769393"
+c_darkgrey = "#2a2b2e"
+
+# Extended HEX color 50% transparent (last 80 number)
+c_alpha_blue = "#0171ba4D"
+c_alpha_green = "#78b01c4D"
+c_alpha_yellow = "#f6ae2d4D"
+c_alpha_red = "#f235354D"
+c_alpha_purple = "#a664974D"
+c_alpha_grey = "#7693934D"
+c_alpha_darkgrey = "#2a2b2e4D"
+
+color_palette_list = [c_blue,c_green,c_yellow,c_red,c_purple,c_grey,c_darkgrey]
+
+
 ## log in terminal without affecting tqdm bar
 def log(*args, **kwargs):
     tqdm.write(*args, **kwargs)   
@@ -32,3 +53,4 @@ def logTable(row_data, output_path, filename, colalign = None):
 
     with open(f"{file_name}.tex", 'w') as file:
         file.write(table_latex_with_caption)
+

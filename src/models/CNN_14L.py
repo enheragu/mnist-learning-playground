@@ -98,4 +98,3 @@ class CNN_14L(BaseModelTrainer):
         x = self.conv_layers(x)
         x = self.fc_layers(x)
         return x
-

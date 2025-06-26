@@ -5,9 +5,10 @@ import os
 import numpy as np
 from itertools import combinations
 
-from utils.log_utils import log, logTable
+from utils.log_utils import log, logTable, color_palette_list
+from plot_distribution import getAllModelData, plotDataDistribution
 
-analysis_path = './analysis_results'
+analysis_path = './analysis_results/distances'
 
 # Error rates from Table 2 -> https://www.mdpi.com/2076-3417/9/15/3169
 error_rates = {
@@ -139,3 +140,17 @@ if __name__ == "__main__":
         ])
     
     logTable(log_data, analysis_path, f'Distances Analysis')
+
+
+    metrics_data = getAllModelData()
+    all_models = metrics_data.keys()
+
+    accuracy_agugmentation = [100-item for item in error_rates["data_augmentated"].values()]
+    accuracy_no_augmentation = [100-item for item in error_rates["no_data_augmentation"].values()]
+    vertical_lines_acc=accuracy_agugmentation+accuracy_no_augmentation
+    # print(f"Vertical lines at coord: {vertical_lines_acc}")
+    plotDataDistribution(metrics_data,
+                        [all_models],
+                        [color_palette_list],
+                        vertical_lines_acc=vertical_lines_acc,
+                        analysis_path=analysis_path)

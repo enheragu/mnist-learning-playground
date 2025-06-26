@@ -58,3 +58,25 @@ def getMetricsLogFile(file_path="training_metrics.yaml"):
                 return all_metrics
     log(f"[Error] File not found: {file_path}")
     return {}
+
+
+
+def print_dict_keys(dict_data, prefix = ""):
+    for key, value in dict_data.items():
+        full_key = f"{prefix}.{key}" if prefix else key
+        print(full_key)
+        if isinstance(value, dict):
+            print_dict_keys(value, full_key)
+
+
+def print_yaml_structure(yaml_data, prefix=""):
+    if isinstance(yaml_data, dict):
+        for key, value in yaml_data.items():
+            full_key = f"{prefix}.{key}" if prefix else key
+            # print(full_key)
+            print_yaml_structure(value, full_key)
+    elif isinstance(yaml_data, list):
+        for index, item in enumerate(yaml_data):
+            full_key = f"{prefix}[{index}]"
+            print(full_key)
+            print_yaml_structure(item, full_key)

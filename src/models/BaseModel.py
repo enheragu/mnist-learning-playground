@@ -116,7 +116,7 @@ class BaseModelTrainer(nn.Module):
         # f1 = f1_score(all_labels, all_preds, average="weighted", zero_division=0)
 
         metrics = {
-            "accuracy": accuracy.tolist()
+            "accuracy": accuracy#.tolist()
             # "precision": precision.tolist(),
             # "recall": recall.tolist(),
             # "f1_score": f1.tolist(),

@@ -8,32 +8,11 @@ from torchsummary import summary
 
 from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L, BatchNormMaxoutNetInNet
 from models.BatchNormMaxoutNetInNet import MINBlock, MaxOutLayer
-from utils.log_utils import log, logTable
+from utils.log_utils import log, logTable, c_blue, c_purple, c_alpha_blue, c_alpha_purple
 from train_models import output_path
 
 analysis_path = './analysis_results/model_info'
 input_size = 28*28
-
-## Custom color definitions
-c_blue = "#0171ba"
-c_green = "#78b01c"
-c_yellow = "#f6ae2d"
-c_red = "#f23535" 
-c_purple = "#a66497"
-c_grey = "#769393"
-c_darkgrey = "#2a2b2e"
-
-# Extended HEX color with 50% transparenci (last 80 number)
-c_alpha_blue = "#0171ba4D"
-c_alpha_green = "#78b01c4D"
-c_alpha_yellow = "#f6ae2d4D"
-c_alpha_red = "#f235354D"
-c_alpha_purple = "#a664974D"
-c_alpha_grey = "#7693934D"
-c_alpha_darkgrey = "#2a2b2e4D"
-
-
-color_palette_list = [c_blue,c_green,c_yellow,c_red,c_purple,c_grey,c_darkgrey]
 
 
 def generate_mermaid_diagram(model, input_size):

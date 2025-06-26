@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm, gamma, shapiro, kurtosis
 
 from utils.yaml_utils import getMetricsLogFile 
-from utils.log_utils import log, logTable
+from utils.log_utils import log, logTable, c_blue, c_green, c_yellow, c_red, c_purple, c_grey, c_darkgrey, color_palette_list
 from train_models import output_path
 
 # Whether to plot or just store images in disk
@@ -19,17 +19,6 @@ only_store = True
 analysis_path = './analysis_results/distributions'
 bin_size = 20
 
-## Custom color definitions
-c_blue = "#0171ba"
-c_green = "#78b01c"
-c_yellow = "#f6ae2d"
-c_red = "#f23535" 
-c_purple = "#a66497"
-c_grey = "#769393"
-c_darkgrey = "#2a2b2e"
-
-color_palette_list = [c_blue,c_yellow,c_red,c_green,c_purple,c_grey,c_darkgrey]
-# color_palette_list = [c_green,c_blue,c_darkgrey,c_yellow, c_red, c_purple, c_grey]
 
 def getAllModelData():
     metrics_file_name = "randomseed_training_metrics.yaml"
@@ -83,20 +72,41 @@ def plot_metric_gammadistribution(data_y, ax, color):
 """
     Plots theoretical normal distribution based on given data, and plots binned distribution or real data
 """
-def plot_metric_distribution(metrics_data, train_duration_data, metric_label = 'accuracy (%)', plot_func = plot_metric_normaldistribution, color_palette = color_palette_list):
+def plot_metric_distribution(metrics_data, train_duration_data, metric_label = 'accuracy (%)', plot_func = plot_metric_normaldistribution, 
+                             color_palette = color_palette_list, vertical_lines_acc = [], analysis_path = analysis_path):
     
     fig, ax = plt.subplots(figsize=(12, 9))
     color_iterator = itertools.cycle(color_palette)
+
+    max_density = 0
+    x_range = [float('inf'), float('-inf')]
 
     for model_name, data_y in metrics_data.items():
         train_duration = np.mean(train_duration_data[model_name])
         train_duration_str = f"{int(train_duration // 60)}min {train_duration % 60:.2f}s"
         color = next(color_iterator)
 
-        sns.histplot(data_y, bins=bin_size, stat="density", alpha=0.4, label=f"{model_name}   (n = {len(data_y)})", #   (mean train: {train_duration_str})",
+        hist = sns.histplot(data_y, bins=bin_size, stat="density", alpha=0.4, label=f"{model_name}   (n={len(data_y)})", #   (mean train: {train_duration_str})",
                      color=color, edgecolor='none', ax=ax)
-
+        
+        patch_heights = [patch.get_height() for patch in hist.patches]
+        max_density = max(max_density, max(patch_heights))
+        patch_heights_x = [patch.get_height() for patch in hist.patches]
+        
+        x_range[0] = min(x_range[0], min(data_y))
+        x_range[1] = max(x_range[1], max(data_y))
         plot_func(data_y, ax, color)
+
+    if metric_label == "Accuracy (%)":
+        for vertical_coord in vertical_lines_acc:
+            ymin, ymax = ax.get_ylim()
+            ax.vlines(x=vertical_coord, ymin=ymin, ymax=max_density, colors=c_grey, linewidth=1, linestyles=':')
+
+        if vertical_lines_acc:
+            lines_in_range = [line for line in vertical_lines_acc if x_range[0] <= line <= x_range[1]]
+            count_in_range = len(lines_in_range)
+            print(f"[{metric_label}] Models {'_'.join(list(metrics_data.keys()))} with range {x_range} include {count_in_range} models from review.")
+
 
     ax.set_title(f"{metric_label} distribution")
     ax.set_xlabel(metric_label)
@@ -105,7 +115,9 @@ def plot_metric_distribution(metrics_data, train_duration_data, metric_label = '
 
     plt.tight_layout()
 
-    plt.savefig(os.path.join(analysis_path,f"plot_{metric_label.replace(' (%)','').replace(' (s)','').replace(' ','_').lower()}_{'_'.join(list(metrics_data.keys()))}.png"))
+    path_name = os.path.join(analysis_path,f"plot_{metric_label.replace(' (%)','').replace(' (s)','').replace(' ','_').lower()}_{'_'.join(list(metrics_data.keys()))}.png")
+    plt.savefig(path_name)
+    # print(f"\t· Stored file in {path_name}")
 
     if only_store:
         plt.close()
@@ -113,20 +125,23 @@ def plot_metric_distribution(metrics_data, train_duration_data, metric_label = '
 """
     Intermediate function to handle each distribution plot wanted
 """
-def plotDataDistribution(metrics_data, models_plot_list = [['all']], color_list = color_palette_list):
-    global color_palette_list
-    
+def plotDataDistribution(metrics_data, models_plot_list = [['all']], color_list = color_palette_list, 
+                         vertical_lines_acc = [], analysis_path=analysis_path):
+    color_iterator = itertools.cycle(color_list)
+
     # Plot all models in single plot
     for index, (model, data) in enumerate(metrics_data.items()):
+        color = next(color_iterator)
         accuracy_data = {model: [entry['accuracy']*100 for entry in metrics_data[model].values()]}
         train_duration_data = {model: [entry['train_duration'] for entry in metrics_data[model].values()]}
         best_epoch_data = {model: [entry['best_epoch'] for entry in metrics_data[model].values()]}
 
-        plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch', plot_func=plot_metric_gammadistribution, color_palette=[color_palette_list[index]])
-        plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)', plot_func=plot_metric_gammadistribution, color_palette=[color_palette_list[index]])
-        plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'Accuracy (%)', color_palette=[color_palette_list[index]])
+        plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch', plot_func=plot_metric_gammadistribution, color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
+        plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)', plot_func=plot_metric_gammadistribution, color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
+        plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'Accuracy (%)', color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
 
     for plot, color_scheme in zip(models_plot_list, color_list):
+        print(f"Generating plot for {plot} model{'s' if len(plot)>1 else ''}")
         train_duration_data = {}
         best_epoch_data = {}
         accuracy_data = {}
@@ -135,10 +150,13 @@ def plotDataDistribution(metrics_data, models_plot_list = [['all']], color_list 
                 accuracy_data[model] = [entry['accuracy']*100 for entry in metrics_data[model].values()]
                 train_duration_data[model] = [entry['train_duration'] for entry in metrics_data[model].values()]
                 best_epoch_data[model] = [entry['best_epoch'] for entry in metrics_data[model].values()]
-
-        plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch', plot_func=plot_metric_gammadistribution, color_palette=color_scheme)
-        plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)', plot_func=plot_metric_gammadistribution, color_palette=color_scheme)
-        plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'Accuracy (%)', color_palette=color_scheme)
+        
+        for model_plot in plot:
+            if model_plot not in metrics_data.keys():
+                print(f"\t· [WARNING] {model_plot} not in metrics available: {metrics_data.keys()}")
+        plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch', plot_func=plot_metric_gammadistribution, color_palette=color_scheme, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
+        plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)', plot_func=plot_metric_gammadistribution, color_palette=color_scheme, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
+        plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'Accuracy (%)', color_palette=color_scheme, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
         
     # plt.show()
 
@@ -249,7 +267,12 @@ def normalityTest(metrics_data, metric = 'accuracy'):
     for model_name, data in metric_data.items():  
         estadistico, p_valor = shapiro(data) 
         kurt = kurtosis(data, fisher=True) 
-        row_data.append([model_name, f"{np.median(data):.3f}", f"{np.mean(data):.3f}", f"{kurt:.4f}", f"{estadistico:.4f}", f"{p_valor:.4f}"])
+        row_data.append([f"{model_name} (n={len(data)})", 
+                         f"{np.median(data):.3f}", 
+                         f"{np.mean(data):.3f}", 
+                         f"{kurt:.4f}", 
+                         f"{estadistico:.4f}", 
+                         f"{p_valor:.4f}"])
 
     log(f"\nSummary Table of {metric.title()} Shapiro-Wilk normality test:")
     logTable(row_data, analysis_path, f"{metric.title()} Normality test", colalign=['left', 'right', 'right', 'right', 'right', 'right'])
@@ -286,7 +309,7 @@ def maxAmplitude(metrics_data, metric='accuracy', unit=" (%)", format='.3f', amp
     for model_name, data in metric_data.items():
         
         amplitude_distribution = normal_amplitude(data)
-        row_data.append([model_name, 
+        row_data.append([f"{model_name} (n={len(data)})", 
                          f"{np.min(data):{format}}", 
                          f"{np.max(data):{format}}", 
                          f"{np.max(data)-np.min(data):{format}}", 
@@ -297,6 +320,20 @@ def maxAmplitude(metrics_data, metric='accuracy', unit=" (%)", format='.3f', amp
 
     log(f"\nSummary {metric.title()} max amplitude:")
     logTable(row_data_sorted, analysis_path, f"{metric.title()} Max amplitude", colalign=['left', 'right', 'right', 'right'])
+
+
+def count_trials(metrics_data):
+
+    row_data = [['Model''N']]
+    metric_data = {}
+    for model, data in metrics_data.items():
+        metric_data[model] = [entry['accuracy']*100 for entry in metrics_data[model].values()]
+        
+    for model_name, data in metric_data.items():  
+        row_data.append([model_name,len(data)])        
+
+    log(f"\nTrials on each model:")
+    logTable(row_data, analysis_path, f"N trials on each model")
 
 
 
@@ -311,12 +348,15 @@ if __name__ == "__main__":
     
     # Once all models' metrics have been gathered, plot the distributions
     if metrics_data:
-        plotDataDistribution(metrics_data,[['SimplePerceptron'],
+        plotDataDistribution(metrics_data,
+                              [['SimplePerceptron'],
                                ['DNN_6L', 'HiddenLayerPerceptron'],
                                ['CNN_5L', 'CNN_3L', 'CNN_14L', 'CNN_4L'],
+                               ['CNN_14L_B10', 'CNN_14L', 'CNN_14L_B25', 'CNN_14L_B50'],
                                all_models],
                               [[c_green],
                                [c_blue,c_darkgrey],
+                               [c_yellow, c_red, c_purple, c_grey],
                                [c_yellow, c_red, c_purple, c_grey],
                                color_palette_list])
         # plotParamAmplitudeRelation(metrics_data)
@@ -326,6 +366,9 @@ if __name__ == "__main__":
         
         maxAmplitude(metrics_data, 'train_duration', unit=' (s)', format='.1f', amplitude_function=gamma_amplitude)
         maxAmplitude(metrics_data, 'best_epoch', unit='', format='.0f', amplitude_function=gamma_amplitude)
+
+        count_trials(metrics_data)
+        print(f"Search Juyang (John) Weng for info about initialization bias and similar stuff https://www.google.com/search?client=ubuntu&channel=fs&q=Juyang+%28John%29+Weng")
     else:
         log("No models found or no metrics to plot.")
     
