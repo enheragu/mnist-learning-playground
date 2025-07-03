@@ -9,7 +9,7 @@ from torchsummary import summary
 from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L, BatchNormMaxoutNetInNet
 from models.BatchNormMaxoutNetInNet import MINBlock, MaxOutLayer
 from utils.log_utils import log, logTable, c_blue, c_purple, c_alpha_blue, c_alpha_purple
-from train_models import output_path
+from utils import output_path
 
 analysis_path = './analysis_results/model_info'
 input_size = 28*28

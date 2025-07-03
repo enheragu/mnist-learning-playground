@@ -19,6 +19,9 @@ from utils.yaml_utils import updateMetricsLogFile
 from utils.log_utils import log, logTable
 
 class BaseModelTrainer(nn.Module):
+    
+    batch_size = 64
+
     def __init__(self, input_size, num_classes, learning_rate=0.001, patience=10, device=None, output_path = ""):
         super(BaseModelTrainer, self).__init__()
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -31,7 +34,6 @@ class BaseModelTrainer(nn.Module):
         self.model_name = type(self).__name__
         self.base_output_path = output_path
 
-        self.batch_size = 64
 
         if self.base_output_path is not None:
             self.output_data_path = os.path.join(self.base_output_path, self.model_name)
@@ -187,7 +189,6 @@ class BaseModelTrainer(nn.Module):
         metrics = self.evaluate_model(test_loader, False)
     
         # self.get_model_summary()
-
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + f".{datetime.now().microsecond // 1000:03d}"
         
         metrics.update({'best_epoch': best_epoch, 

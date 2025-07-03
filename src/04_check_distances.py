@@ -6,7 +6,9 @@ import numpy as np
 from itertools import combinations
 
 from utils.log_utils import log, logTable, color_palette_list
-from plot_distribution import getAllModelData, plotDataDistribution
+from plot_distribution import plotDataDistribution
+from utils import output_path
+from utils import getAllModelData
 
 analysis_path = './analysis_results/distances'
 
@@ -142,7 +144,7 @@ if __name__ == "__main__":
     logTable(log_data, analysis_path, f'Distances Analysis')
 
 
-    metrics_data = getAllModelData()
+    metrics_data = getAllModelData(output_path)
     all_models = metrics_data.keys()
 
     accuracy_agugmentation = [100-item for item in error_rates["data_augmentated"].values()]

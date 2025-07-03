@@ -6,3 +6,6 @@ matplotlib
 seaborn
 tabulate
 tqdm
+pandas
+pyarrow
+statsmodels

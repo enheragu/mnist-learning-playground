@@ -20,12 +20,11 @@ from utils.yaml_utils import updateMetricsLogFile, getMetricsLogFile
 from utils.set_seed import set_seed
 from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L, BatchNormMaxoutNetInNet
 from models.BatchSizeStudy import CNN_14L_B10, CNN_14L_B25, CNN_14L_B50, CNN_14L_B80
+from utils import output_path
 
 # How many train loops are executed to study its variance
 train_loops = 800
 sameseed = False
-current_dir_path = os.path.dirname(os.path.abspath(__file__))
-output_path = os.path.join(current_dir_path,"../output_data")
 
 # General configuration
 input_size = 28 * 28  # Size of each image flattened

@@ -20,9 +20,9 @@ tmux split-window -v -t $SESSION_NAME:0.0 -p 63
 tmux split-window -v -t $SESSION_NAME:0.1
 
 # Ejecutar capture-pane de manera continua para cada panel
-tmux send-keys -t $SESSION_NAME:0.0 "while true; do tmux capture-pane -t eeha_mnist_tests -pS -1000 | tail -n 20; done" C-m
-tmux send-keys -t $SESSION_NAME:0.1 "while true; do tmux capture-pane -t eeha_mnist_tests_2 -pS -1000 | tail -n 20; done" C-m
-tmux send-keys -t $SESSION_NAME:0.2 "while true; do tmux capture-pane -t eeha_mnist_tests_3 -pS -1000 | tail -n 20; done" C-m
+tmux send-keys -t $SESSION_NAME:0.0 "while true; do tmux capture-pane -t eeha_mnist_tests -pS -1000 | tail -n 20 | grep .; done" C-m
+tmux send-keys -t $SESSION_NAME:0.1 "while true; do tmux capture-pane -t eeha_mnist_tests_2 -pS -1000 | tail -n 20 | grep .; done" C-m
+tmux send-keys -t $SESSION_NAME:0.2 "while true; do tmux capture-pane -t eeha_mnist_tests_3 -pS -1000 | tail -n 20 | grep .; done" C-m
 
 # Ejecutar watch -n 1 nvidia-smi en el cuarto panel
 tmux send-keys -t $SESSION_NAME:0.3 "watch -n 1 nvidia-smi" C-m

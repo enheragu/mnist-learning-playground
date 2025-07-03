@@ -27,18 +27,34 @@ c_alpha_darkgrey = "#2a2b2e4D"
 color_palette_list = [c_blue,c_green,c_yellow,c_red,c_purple,c_grey,c_darkgrey]
 
 
-## log in terminal without affecting tqdm bar
-def log(*args, **kwargs):
-    tqdm.write(*args, **kwargs)   
 
 
-def logTable(row_data, output_path, filename, colalign = None):
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    ERROR = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+def log(*args, color=bcolors.ENDC, **kwargs):
+    message = " ".join(str(arg) for arg in args)
+    tqdm.write(f"{color}{message}{bcolors.ENDC}", **kwargs)
+
+
+def logTable(row_data, output_path, filename, colalign = None, screen_log = True):
 
     table_str = tabulate.tabulate(row_data, headers="firstrow", tablefmt="fancy_grid", colalign = colalign)
     table_latex = tabulate.tabulate(row_data, headers="firstrow", tablefmt="latex", colalign = colalign)
-    log(table_str)
+    
+    if screen_log:
+        log(table_str)
+
     file_name = os.path.join(output_path, filename.lower().replace(' ','_'))
-    log(f"Stored data in {file_name}")
+    log(f"Stored data table in {file_name}")
     with open(f"{file_name}.txt", 'w') as file:
         file.write(f'{filename}\n')
         file.write(table_str)

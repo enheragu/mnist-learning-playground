@@ -26,6 +26,15 @@ def represent_list(dumper, data):
     else:
         return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=False)
 
+def dict_merge(dct, merge_dct):
+    for k, v in merge_dct.items():
+        if (k in dct and isinstance(dct[k], dict) and isinstance(v, dict)):
+            dict_merge(dct[k], v)
+        else:
+            dct[k] = v
+    return dct
+
+
 def updateMetricsLogFile(metrics, file_path="training_metrics.yaml"):
     lock_file = f"{file_path}.lock"
 
@@ -36,7 +45,8 @@ def updateMetricsLogFile(metrics, file_path="training_metrics.yaml"):
         else:
             all_metrics = {}
 
-        all_metrics.update(metrics)
+        all_metrics = dict_merge(all_metrics, metrics)
+        # all_metrics.update(metrics)
 
     with FileLock(lock_file) as lock1:
         with open(file_path, "w") as file:

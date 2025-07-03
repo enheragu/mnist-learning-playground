@@ -5,8 +5,8 @@ import math
 import numpy as np
 import scipy.stats as stats
 
-from plot_distribution import getAllModelData
-
+from utils import output_path
+from utils import getAllModelData
 from utils.log_utils import log, logTable
 
 montecarlo_samples = 500000 # Slow version :) -> 1000000
@@ -150,7 +150,7 @@ def computeBetterResultSampleSize(dict_data, g_names, percentile = 96):
         computeBootstrapBetterResultSampleSize(dict_data[name], percentile)
 
 if __name__ == "__main__":
-    metrics_data = getAllModelData()
+    metrics_data = getAllModelData(output_path)
 
     accuracy_data = {}
     log("Data available is:")
