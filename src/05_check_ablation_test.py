@@ -5,11 +5,14 @@ import os
 import re
 import csv
 
+import itertools
+import copy
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 import statsmodels.api as sm
+from statsmodels.stats.anova import AnovaRM
 from statsmodels.formula.api import ols, mixedlm
 from scipy.stats import kendalltau, rankdata
 
@@ -19,18 +22,17 @@ from utils.yaml_utils import getMetricsLogFile
 from utils.plot_distribution import plotDataDistribution
 from models.BatchSizeStudy import CNN_14L_B10, CNN_14L_B25, CNN_14L_B50, CNN_14L_B80
 from models import CNN_14L
-from utils import output_path
+from utils import output_path, ablation_data_file
 
 anova_table_analysis = True
 mixedlm_analysis = False
 percentile_analysis = True
-kendall_w_analysis = True
-plot_interaction = False
+kendall_w_analysis = False
+plot_interaction = True
 add_extra_data = False # Inculdes data from batch size study
 log_complete_table = False  # CSV version is stored anyway
 
 analysis_path = './analysis_results/ablation_anova'
-data_file = f'{output_path}/CNN_14L_Ablation/training_metrics.yaml'
 number_of_conditions = 9 # Combinations of param changes (3 batch rates with 3 learning rates   )
 
 date_pattern = re.compile(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.\d+")
@@ -93,15 +95,35 @@ def generate_interaction_plot(df, x_var, y_var, hue_var, title, **kwargs):
     # plt.show()
     
     plt.savefig(os.path.join(analysis_path, f'interaction_plot_{x_var}_{y_var}_{hue_var}.png'))
+    log(f"Saved interaction plot: {os.path.join(analysis_path, f'interaction_plot_{x_var}_{y_var}_{hue_var}.png')}", color=bcolors.OKGREEN)
 
 
+def plotScaterplot(pivot_df, output_path='.', filename='scatterplot_conditions'):
+    condiciones = list(pivot_df.columns)
+    pares = list(itertools.combinations(condiciones, 2))
+    os.makedirs(output_path, exist_ok=True)
+
+    for cond1, cond2 in pares:
+        data = pivot_df[[cond1, cond2]].dropna()
+        plt.figure(figsize=(10, 10))
+        sns.scatterplot(x=cond1, y=cond2, data=data)
+        plt.title(f'Accuracy: {cond1} vs {cond2}')
+        plt.xlabel(cond1)
+        plt.ylabel(cond2)
+        plot_filename = f'{filename}_{cond1}_vs_{cond2}.png'
+        filepath = os.path.join(output_path, plot_filename)
+        plt.tight_layout()
+        plt.savefig(filepath, bbox_inches='tight')
+        plt.close()
+
+    print(f"Plots guardados en: {output_path}")
 
 if __name__ == "__main__":
-    os.makedirs(analysis_path, exist_ok=True)
+    os.makedirs(os.path.join(analysis_path, 'tables'), exist_ok=True)
 
     train_duration = []
     indexer = Indexer()
-    ablation_metrics = getMetricsLogFile(data_file)
+    ablation_metrics = getMetricsLogFile(ablation_data_file)
     ablation_matrix = []
     table_keys = [['index', 'seed','batch_size', 'learning_rate', 'accuracy']]
     
@@ -150,10 +172,8 @@ if __name__ == "__main__":
 
 
     log_ablation_matrix.sort(key=lambda x: x[0])
-    logTable(log_complete_table_keys+log_ablation_matrix, analysis_path, f'log_ablation_matrix', screen_log = log_complete_table)
+    logTable(log_complete_table_keys+log_ablation_matrix, os.path.join(analysis_path, 'tables'), f'log_ablation_matrix', screen_log = log_complete_table)
 
-    with open(os.path.join(analysis_path,f'{"extended_" if add_extra_data else ""}ablation_matrix.csv'), mode="w", newline="") as file:
-        csv.writer(file).writerows(table_keys+ablation_matrix)
 
     average_time_min = sum(train_duration)/len(train_duration)
 
@@ -178,6 +198,8 @@ if __name__ == "__main__":
         log(f"[WARN] Still not enough complete iterations to be processed", color=bcolors.WARNING)
         exit()
 
+    csv_path = os.path.join(analysis_path,'tables',f'{"extended_" if add_extra_data else ""}ablation_matrix.csv')
+    df.to_csv(csv_path, encoding='utf-8')
 
     # First model with just principal effects_
     variable_index = 'C(index)' # C(index) treats index as a categoric variable
@@ -188,6 +210,7 @@ if __name__ == "__main__":
     ##  Regresion with ANOVA table  ##
     ##################################
     if anova_table_analysis:
+        # pd.set_option('display.float_format', '{:.25e}'.format)
         def annova_analysis(df, variable_index, variable_batch, variable_learnr):
             formula_main = f'accuracy ~ {variable_index} + {variable_batch} + {variable_learnr}'
 
@@ -196,10 +219,12 @@ if __name__ == "__main__":
                             f'+ {variable_index}:{variable_batch} + {variable_index}:{variable_learnr} + {variable_batch}:{variable_learnr}'
                             )
             
-            # Principal effects with double interactions with triple interactions:
-            formula_triple = f'accuracy ~ {variable_batch} * {variable_learnr}' # * {variable_index}'
+            # Principal effects with double interactions with triple interactions for just batch and lr:
+            formula_triple = f'accuracy ~ C(seed) + {variable_batch} * {variable_learnr}' # * {variable_index}'
 
-            for formula in [formula_main, formula_double, formula_triple]:
+            formula_noseed = f'accuracy ~ {variable_batch} * {variable_learnr}'
+
+            for formula in [formula_main, formula_double, formula_triple, formula_noseed]:
                 model = ols(formula, data=df).fit()
                 anova_table = sm.stats.anova_lm(model, typ=2)
                 
@@ -210,11 +235,46 @@ if __name__ == "__main__":
             
                 anova_table['Interpretation'] = anova_table['PR(>F)'].apply(interpret_pvalue)
                 log(anova_table)
-
+        
         log(f"\nPerform ANOVA analysis with complete data:", color=bcolors.OKGREEN)
         annova_analysis(df, variable_index, variable_batch, variable_learnr)
-        log(f"\nPerform ANOVA analysis with filtered data (no 70 batch):", color=bcolors.OKGREEN)
-        annova_analysis(df[df['batch_size'] != 70].copy(), variable_index, variable_batch, variable_learnr)
+        # log(f"\nPerform ANOVA analysis with filtered data (no 70 batch):", color=bcolors.OKGREEN)
+        # annova_analysis(df[df['batch_size'] != 70].copy(), variable_index, variable_batch, variable_learnr)
+        
+        def annova_repeated_measures(df, subject, factor_list):
+            log(f"\nPerforming ANOVA Repeated Measures with complete model (subject: {subject}; factor list: {factor_list}):", color=bcolors.OKCYAN)
+            aovrm = AnovaRM(
+                data=df,
+                depvar='accuracy',
+                subject=subject,
+                within=factor_list,
+            )
+            anova_results = aovrm.fit()
+            log(anova_results)
+
+            import pingouin as pg
+            # Has too many levels on each factor, not allowed by sphericity test implemented in this library
+            # spher_results = pg.sphericity(
+            #     data=df,
+            #     dv='accuracy',
+            #     subject=subject,
+            #     within=factor_list
+            # )
+            # log(f"Spher test results:\n{spher_results}")
+
+            aov = pg.rm_anova(
+                data=df,
+                dv='accuracy',
+                within=factor_list,
+                subject=subject,
+                correction=True,  # Aplica la corrección si es necesaria
+                detailed=True     # Muestra la tabla completa
+            )
+            log(f"Greenhouse-Geisser annova correcte: \n{aov}")
+        
+        annova_repeated_measures(df, subject='seed', factor_list=['batch_size', 'learning_rate'])
+        # annova_repeated_measures(df, subject='batch_size', factor_list=['seed', 'learning_rate'])
+        # annova_repeated_measures(df, subject='learning_rate', factor_list=['seed', 'batch_size'])
 
     ###############################
     ###   Mixed effects models   ##
@@ -260,51 +320,76 @@ if __name__ == "__main__":
             (or high) performance when other hyperparameters are used?
     """
     if percentile_analysis:
+        df_percentile = copy.deepcopy(df) # Avoid modifying the original df
         log(f"\nPerform Percentile Analysis of Seed Consistency Across Hyperparameters", color=bcolors.OKCYAN)
-        overall_avg_accuracy_per_index = df.groupby('index')['accuracy'].mean().sort_values(ascending=False)
-        # Rank the indexes based on their average accuracy, the better the percent rank, the better the index in
-        # terms of accuracy.
-        index_overall_percent_rank = overall_avg_accuracy_per_index.rank(pct=True, ascending=False)
+        
+        df_percentile['condition'] = df_percentile['batch_size'].astype(str) + '_' + df_percentile['learning_rate'].astype(str)
+        df_percentile['percentile_within_condition'] = df_percentile.groupby('condition')['accuracy'].rank(pct=True, ascending=False)
+        percentile_table = df_percentile.pivot_table(index='seed', columns='condition', values='percentile_within_condition')
+        # Percentile table (percentiles go from 0 to 1, where 1 is the best seed performance in that condition)        
+        log(f"Percentile talbe indexed by seed:\n{percentile_table}")
 
-        # Prepare to iterate each batch size and learning rate combination
-        unique_hyperparam_configs = df[['batch_size', 'learning_rate']].drop_duplicates()
-        consistency_results = []
+        # Calcular la matriz de correlación entre condiciones
+        correlations = percentile_table.corr(method='spearman')
 
-        for _, config_row in unique_hyperparam_configs.iterrows():
-            bs = config_row['batch_size']
-            lr = config_row['learning_rate']
-            subset_df = df[(df['batch_size'] == bs) & (df['learning_rate'] == lr)].copy() # Get this specific hiperparam configuration
+        total_repeated_table = (df_percentile.groupby('condition')['accuracy'].apply(lambda x: x.value_counts().loc[lambda v: v > 1].sum())
+                                .reset_index(name='total_repetitions'))
+        values_repeated_empates = (df_percentile.groupby('condition')['percentile_within_condition'].apply(lambda x: x.value_counts().loc[lambda v: v > 1].count())
+                                .reset_index(name='repeated_percentiles'))
+        unique_percentiles = (df_percentile.groupby('condition')['percentile_within_condition'].nunique()
+                                .reset_index(name='unique_percentiles'))
+        accuracy_amplitude = (df_percentile.groupby('condition')['accuracy'].agg(lambda x: x.max() - x.min())
+                                .reset_index(name='accuracy_amplitude'))
+        
+        summary_table = total_repeated_table \
+            .merge(values_repeated_empates, on='condition') \
+            .merge(unique_percentiles, on='condition') \
+            .merge(accuracy_amplitude, on='condition')
+        print(summary_table)
+        with open(f'{analysis_path}/tables/percentile_repetitions.tex', 'w', encoding='utf-8') as f:
+            f.write(summary_table.to_latex())
 
-            if not subset_df.empty:
-                subset_df_sorted = subset_df.sort_values(by='accuracy', ascending=False)
-                # Get percentil
-                subset_df_sorted['percent_rank_config'] = subset_df_sorted['accuracy'].rank(pct=True, ascending=False)
+        pivot_df = df_percentile.pivot_table(index='seed', columns='condition', values='accuracy')
+        condition_list = list(pivot_df.columns)
+        plot_df = pivot_df[condition_list].dropna()
 
-                # Unir con el rank general de la semilla
-                subset_df_sorted['overall_percent_rank'] = subset_df_sorted['index'].map(index_overall_percent_rank)
+        plotScaterplot(pivot_df, output_path=analysis_path, filename='scatterplot_conditions')
+        # g = sns.PairGrid(plot_df)
+        # g.map_lower(sns.scatterplot)  # Only lower part of the matrix, remove repeated and diagonal
+        # plt.suptitle('Scatterplots de accuracies entre condiciones', y=1.02)
+        # plt.show()
 
-                # Calcular la diferencia (o correlación) entre el rank general y el rank específico
-                # Una pequeña diferencia (o alta correlación) sugiere consistencia
-                rank_difference = (subset_df_sorted['percent_rank_config'] - subset_df_sorted['overall_percent_rank']).abs().mean()
-                
-                # Una métrica más formal: Coeficiente de correlación de Spearman (rango)
-                # Alta correlación de Spearman (>0.7-0.8) indica que las semillas mantienen su orden.
-                # Baja correlación (cercana a 0) indica que el orden de las semillas varía mucho.
-                spearman_corr = subset_df_sorted['percent_rank_config'].corr(subset_df_sorted['overall_percent_rank'], method='spearman')
+        from tabulate import tabulate 
+        log(f"\nSpearman Correlation (Seed Ranks) between Hyperparameter Combinations:")
+        log(tabulate(correlations , headers='keys', tablefmt='fancy_grid'))
 
-                consistency_results.append({
-                    'batch_size': bs,
-                    'learning_rate': lr,
-                    'Mean Absolute Rank Difference': rank_difference,
-                    'Spearman Correlation (Seed Ranks)': spearman_corr
-                })
-                # log(f"Config BS={bs}, LR={lr}: Avg Rank Diff={rank_difference:.4f}, Spearman Corr={spearman_corr:.4f}")
-            else:
-                log(f"No data for config BS={bs}, LR={lr}. Skipping.", color=bcolors.WARNING)
+        # Just one part of the matrix (upper triangle) to avoid redundancy
+        mask = np.triu(np.ones(correlations.shape), k=1).astype(bool)
+        correlations_no_diag = correlations.where(mask)
+        with open(f'{analysis_path}/tables/percentile_correlations.tex', 'w', encoding='utf-8') as f:
+            f.write(correlations_no_diag.to_latex(float_format="%.4f".__mod__))
 
 
-        consistency_df = pd.DataFrame(consistency_results)
-        log(consistency_df)
+        corr_matrix = correlations.copy()
+        np.fill_diagonal(corr_matrix.values, np.nan)
+        corr_matrix['batch_size'] = [c.split('_')[0] for c in corr_matrix.index]
+        corr_matrix['learning_rate'] = [c.split('_')[1] for c in corr_matrix.index]
+
+        # batch_corr_means = corr_matrix.groupby('batch_size').mean(numeric_only=True)
+        batch_corr_means = corr_matrix.groupby('batch_size').median(numeric_only=True)
+        print("\nMedian of correlations by batch size:")
+        print(batch_corr_means)
+        with open(f'{analysis_path}/tables/percentile_correlations_by_batch.tex', 'w', encoding='utf-8') as f:
+            f.write(batch_corr_means.to_latex(float_format="%.4f".__mod__))
+
+
+        # lr_corr_means = corr_matrix.groupby('learning_rate').mean(numeric_only=True)
+        lr_corr_means = corr_matrix.groupby('learning_rate').median(numeric_only=True)
+        print("\nMedian of correlations by learning rate:")
+        print(lr_corr_means)
+        with open(f'{analysis_path}/tables/percentile_correlations_by_lr.tex', 'w', encoding='utf-8') as f:
+            f.write(lr_corr_means.to_latex(float_format="%.4f".__mod__))
+
 
         log("\nOverall Interpretation of Seed Consistency", color=bcolors.WARNING)
         log("If 'Spearman Correlation (Seed Ranks)' values are high (e.g., > 0.7-0.8) across most configurations,")
@@ -319,25 +404,30 @@ if __name__ == "__main__":
         best_config_counts['percentage'] = (best_config_counts['count'] / total_seeds) * 100
 
         log("\nPercentage of Seeds for which each HP Combination yielded the HIGHEST Accuracy:")
-        log(best_config_counts.sort_values(by='percentage', ascending=False).round(3))
+        log_df = best_config_counts.sort_values(by='percentage', ascending=False).round(3)
+        log(log_df)
         log("Interpretation: If one combination consistently appears as 'best' (e.g., >50%), then the best HP choice is robust to seed changes. If percentages are spread out, it implies the 'best' combination is highly dependent on the seed.", color=bcolors.WARNING)
 
+        with open(f'{analysis_path}/tables/best_seed_percentage.tex', 'w', encoding='utf-8') as f:
+            f.write(log_df.to_latex())
 
         plt.figure(figsize=(12, 7))
         # Create labels for the x-axis that combine batch_size and learning_rate
         best_config_counts['combo_label'] = best_config_counts.apply(
-            lambda row: f"BS:{int(row['batch_size'])}, LR:{row['learning_rate']}", axis=1
+            lambda row: f"BS:{int(row['batch_size'])}\nLR:{row['learning_rate']}", axis=1
         )
         sns.barplot(
             data=best_config_counts.sort_values(by='percentage', ascending=False),
             x='combo_label',
             y='percentage',
-            palette='viridis' # Choose a color palette
+            palette=color_palette_list # Choose a color palette
         )
-        plt.title('Percentage of Seeds for which each HP Combination is "Best"')
-        plt.xlabel('Hyperparameter Combination')
-        plt.ylabel('Percentage of Seeds (%)')
-        plt.xticks(rotation=45, ha='right') # Rotate labels for better readability
+        plt.title('Percentage of Seeds for which each HP Combination is "Best"', fontsize=20)
+        plt.xlabel('Hyperparameter Combination', fontsize=20)
+        plt.ylabel('Percentage of Seeds (%)', fontsize=20)
+        plt.xticks(fontsize=18)
+        plt.yticks(fontsize=18)
+        # plt.xticks(rotation=45, ha='right') # Rotate labels for better readability
         plt.grid(axis='y', linestyle='--', alpha=0.7)
         plt.tight_layout()
         plt.savefig(os.path.join(analysis_path, 'best_hp_combination_per_seed_bar_chart.png'))
@@ -443,12 +533,12 @@ if __name__ == "__main__":
         
         # Order indexes based on accuracy for a given learning rate level
         df['index'] = df['index'].astype('category')
-        subset = df[df['batch_size'] == 40]
+        subset = df[df['batch_size'] == 10]
         ordered_categories = subset.groupby('index', observed=False)['accuracy'].mean().sort_values().index.tolist()
         generate_interaction_plot(df, 'index', 'accuracy', 'batch_size', 'Interation Plot: Index vs Accuracy by Batch Size', order=ordered_categories)
         
         # Order indexes based on accuracy for a given learning rate level
         df['index'] = df['index'].astype('category')
-        subset = df[df['learning_rate'] == 0.001]
+        subset = df[df['learning_rate'] == 0.01]
         ordered_categories = subset.groupby('index', observed=False)['accuracy'].mean().sort_values().index.tolist()
         generate_interaction_plot(df, 'index', 'accuracy', 'learning_rate', 'Interation Plot: Index vs Accuracy by Learning Rate', order=ordered_categories)

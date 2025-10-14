@@ -9,3 +9,4 @@ tqdm
 pandas
 pyarrow
 statsmodels
+pingouin

@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 # encoding: utf-8
 
+import os
 import math
 import numpy as np
 import scipy.stats as stats
 
 from utils import output_path
 from utils import getAllModelData
-from utils.log_utils import log, logTable
+from utils.log_utils import log, logTable, c_blue, c_green, c_yellow, c_red, c_purple, c_grey, c_darkgrey, color_palette_list
+from utils.plot_distribution import plot_metric_distribution
+
+
+analysis_path = './analysis_results/analysis'
 
 montecarlo_samples = 500000 # Slow version :) -> 1000000
-bootstrap_samples = 50000 # Slow version :) -> 100000
+bootstrap_samples = 100000 # Slow version :) -> 100000
 
 """
     Given 2 sets of data it computes the probability of, when getting one random sample
@@ -57,15 +62,10 @@ def computeBootstrapSwitchedProbability(dict_data = {'group1': [1,3], 'group2': 
     max_list = [np.max(dict_data[name]) for name in g_names]
     original_order = np.argsort(max_list) # Get index that sort the array min to max
 
+    samples_list = [np.random.choice(dict_data[name], size=n_samples, replace=True) for name in g_names]
     switched_count = 0
-    for _ in range(n_samples):
-        # Bootstrap resampling (resamples and then takes random observation from that)
-        observations_list = [
-            np.random.choice(
-                np.random.choice(dict_data[name], size=len(dict_data[name]), replace=True)
-            )
-            for name in g_names
-        ]
+    for i in range(n_samples):
+        observations_list = [samples_list[j][i] for j in range(len(g_names))]
         observations_order = np.argsort(observations_list)
 
         if not np.array_equal(observations_order, original_order):
@@ -93,22 +93,41 @@ def computeSwtichedProbability(dict_data, g_names):
 
 
 
-
 """
     Given a set of data, computes the amount of repetitions a model should be trained to get
     a better result than the one a 5% top (of real data). Based on the approximated normal
     distribution to the given data
 """
-def computeNormalDistBetterResultSampleSize(data, percentile):
+def computeMonteCarloBetterResultSampleSize(data, percentile = 96, percentile_value = None, n_samples = montecarlo_samples):
+    data = np.array(data)
+    if percentile_value is not None:
+        percentile = percentile = np.sum(data < percentile_value) / (np.sum(data < percentile_value) + np.sum(data > percentile_value)) * 100
+        value = percentile_value
+    else:
+        value = np.percentile(data, percentile)
 
     g_mean = np.mean(data)
     g_std = np.std(data)
-    percentile_value = np.percentile(data, percentile)
-    accumulated_prob = stats.norm.cdf(percentile_value, loc=g_mean, scale=g_std) 
-    probability_in_normal_dist = 1 - accumulated_prob
+
+    n_iterations_monte_carlo = []
+    for _ in range(n_samples):
+        n_iterations_monte_carlo.append(0)
+        while True:
+            observation = np.random.normal(loc=g_mean, scale=g_std, size=1)
+            if observation > value:
+                break
+
+            n_iterations_monte_carlo[-1]+=1
     
-    n_samples = accumulated_prob/probability_in_normal_dist
-    log(f"\t[NormalDist] Samples computed: {n_samples:.4f}      ({probability_in_normal_dist*100:.4f} probability in aproximated normal distribution)")
+    train_iterations = np.mean(n_iterations_monte_carlo)
+    train_iterations_std = np.std(n_iterations_monte_carlo) 
+
+    plot_metric_distribution({'': n_iterations_monte_carlo}, train_duration_data = None, metric_label = f'number of samples to reach {percentile} percentile based on a Monte Carlo simulation', plot_func = None, 
+                             color_palette = color_palette_list, vertical_lines_acc = [], analysis_path = analysis_path,
+                             plot_filename = f'monte_carlo_sample_simulation_{value:.2f}',
+                             bin_size=40)
+    
+    log(f"\t[MonteCarlo] Samples computed: {train_iterations:.4f} (std {train_iterations_std:.4f})")
 
 
 
@@ -117,23 +136,31 @@ def computeNormalDistBetterResultSampleSize(data, percentile):
     a better result than the one a 5% top (of real data). Based on the approximated normal
     distribution to the given data
 """
-def computeBootstrapBetterResultSampleSize(data, percentile, n_samples = bootstrap_samples):
-    
-    percentile_value = np.percentile(data, percentile)
+def computeBootstrapBetterResultSampleSize(data, percentile = 96, percentile_value = None, n_samples = bootstrap_samples):
+    data = np.array(data)
+    if percentile_value is not None:
+        percentile = percentile = np.sum(data < percentile_value) / (np.sum(data < percentile_value) + np.sum(data > percentile_value)) * 100
+        value = percentile_value
+    else:
+        value = np.percentile(data, percentile)
 
     n_iterations_boosttrap = []
     for _ in range(n_samples):
         n_iterations_boosttrap.append(0)
         while True:
-            observation = np.random.choice(np.random.choice(data, size=len(data), replace=True))
-
-            if observation > percentile_value:
+            observation = np.random.choice(data, size=1, replace=True)
+            if observation > value:
                 break
 
             n_iterations_boosttrap[-1]+=1
                 
     train_iterations = np.mean(n_iterations_boosttrap)
     train_iterations_std = np.std(n_iterations_boosttrap)
+
+    plot_metric_distribution({'': n_iterations_boosttrap}, train_duration_data = None, metric_label = f'number of samples to reach {percentile} percentile based on a Bootstrap simulation', plot_func = None, 
+                             color_palette = color_palette_list, vertical_lines_acc = [], analysis_path = analysis_path,
+                             plot_filename = f'bootstrap_sample_simulation_{value:.2f}',
+                             bin_size=40)
 
     log(f"\t[Bootstrap] Samples computed: {train_iterations:.4f} (std {train_iterations_std:.4f})")
 
@@ -142,14 +169,21 @@ def computeBootstrapBetterResultSampleSize(data, percentile, n_samples = bootstr
     Wrap function to compute train iterations to get a result better than the percentile of provided data
     both using approximated normal distribution and bootstrap approach
 """
-def computeBetterResultSampleSize(dict_data, g_names, percentile = 96):
+def computeBetterResultSampleSize(dict_data, g_names, percentile = 96, accuracy_value = None):
     for name in g_names:
-        percentile_value = np.percentile(dict_data[name], percentile)
+        if accuracy_value is not None:
+            percentile_value = accuracy_value
+            data = np.array(dict_data[name])
+            percentile = np.sum(data < percentile_value) / (np.sum(data < percentile_value) + np.sum(data > percentile_value)) * 100
+        else:
+            percentile_value = np.percentile(dict_data[name], percentile)
         log(f"Analysis of train size for {name}, to get value > {percentile_value:.4f} (percentile {percentile} of data), you would need:")
-        computeNormalDistBetterResultSampleSize(dict_data[name], percentile)
-        computeBootstrapBetterResultSampleSize(dict_data[name], percentile)
+
+        computeMonteCarloBetterResultSampleSize(dict_data[name], percentile=percentile, percentile_value=accuracy_value)
+        computeBootstrapBetterResultSampleSize(dict_data[name], percentile=percentile, percentile_value=accuracy_value)
 
 if __name__ == "__main__":
+    os.makedirs(f"{analysis_path}", exist_ok=True)
     metrics_data = getAllModelData(output_path)
 
     accuracy_data = {}
@@ -160,6 +194,7 @@ if __name__ == "__main__":
     # log(f"Accuracy data filtered: {accuracy_data}")
 
     computeBetterResultSampleSize(accuracy_data, ['SimplePerceptron'])
+    computeBetterResultSampleSize(accuracy_data, ['CNN_14L'], percentile=92)  
 
     computeSwtichedProbability(accuracy_data, ['HiddenLayerPerceptron','DNN_6L'])
     computeSwtichedProbability(accuracy_data, ['CNN_3L', 'CNN_4L', 'CNN_5L','CNN_14L'])

@@ -7,6 +7,7 @@ import yaml
 from utils.file_lock import FileLock
 from utils.log_utils import log, logTable
 
+
 # Check if all values in the dictionary/list are of basic types
 def is_basic_types(values):
     basic_types = (int, str, bool, float)

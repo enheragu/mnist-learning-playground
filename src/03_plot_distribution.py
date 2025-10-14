@@ -7,13 +7,13 @@ import itertools
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 from scipy.stats import norm, gamma, shapiro, kurtosis
 
-from utils.yaml_utils import getMetricsLogFile 
 from utils.log_utils import log, logTable, c_blue, c_green, c_yellow, c_red, c_purple, c_grey, c_darkgrey, color_palette_list
-from utils import getAllModelData
-from utils.plot_distribution import plotDataDistribution, only_store, plot_metric_distribution, bin_size
-from utils import output_path
+from utils import getAllModelData, getAblationModelData
+from utils.plot_distribution import plotDataDistribution, only_store, plot_metric_distribution
+from utils import output_path, ablation_data_file
 
 analysis_path = './analysis_results/distributions'
 
@@ -22,7 +22,7 @@ analysis_path = './analysis_results/distributions'
     Just plots the amplitude of the distribution against the number of params
     to see if they somehow relate
 """
-def plotParamAmplitudeRelation(metrics_data):
+def plotParamAmplitudeRelation(metrics_data, title_tag=''):
     import models
     from train_models import input_size, num_classes, learning_rate, patience
 
@@ -52,7 +52,7 @@ def plotParamAmplitudeRelation(metrics_data):
 
     # Mostrar la gráfica
     plt.grid(True)
-    plt.savefig(os.path.join(analysis_path,f"amplitude_relation.png"))
+    plt.savefig(os.path.join(analysis_path,f"amplitude_relation_{title_tag}.png"))
 
     if only_store:
         plt.close()
@@ -60,39 +60,42 @@ def plotParamAmplitudeRelation(metrics_data):
 """
     Just plots the sampling error for each model against sample size
 """
-def plotSamplingError(metrics_data, metric = 'accuracy'):
-    sample_sizes = np.arange(1, 101)  # Tamaño de muestra de 1 a 100
+def plotSamplingError(metrics_data, metric = 'accuracy', title_tag='', plot_models = [], color_list = color_palette_list):
+    sample_sizes = np.arange(1, 21)  # Tamaño de muestra de 1 a 20
 
     metric_data = {}
     log("Data available is:")
     for model, data in metrics_data.items():
         metric_data[model] = [entry[metric]*100 for entry in metrics_data[model].values()]
         
-
     fig, ax = plt.subplots(figsize=(12, 9))
-    color_iterator = itertools.cycle(color_palette_list)
-    eq = r'Sampling Error = $\sigma/\sqrt{n}$'
+    color_iterator = itertools.cycle(color_list)
+    # eq = r'Sampling Error = $\sigma/\sqrt{n}$'
 
-    row_data = [['Model', '1 Sample (%)', '5 Samples (%)', '10 Samples (%)', '25 Samples (%)', '50 Samples (%)', '100 Samples (%)']]
-    for model_name, data in metric_data.items():        
+    row_data = [['Model', '1 Sample (%)', '5 Samples (%)', '10 Samples (%)', '25% Sample (%)', '50% Sample (%)', f'{len(sample_sizes)} Samples (%)']]
+    for model_name, data in metric_data.items(): 
+        if plot_models!=[] and model_name not in plot_models:
+            log(f"[plotSamplingError] Skipping model {model_name} as it is not in the specified plot_models list {plot_models}.")
+            continue
+
         g_std = np.std(data)
         errors = g_std / np.sqrt(sample_sizes)
         plt.plot(sample_sizes, errors, label=f'{model_name}', color=next(color_iterator), linewidth=2)
         
         row_data.append([
             model_name, 
-            f"{errors[0]:.3f}",   # Error for 1 observation
-            f"{errors[4]:.3f}",   # Error for 5 observations
-            f"{errors[9]:.3f}",   # Error for 10 observations
-            f"{errors[24]:.3f}",   # Error for 25 observations
-            f"{errors[49]:.3f}",   # Error for 50 observations
-            f"{errors[99]:.3f}"   # Error for 100 observations
+            f"{errors[0]:.3f}",
+            f"{errors[4]:.3f}",
+            f"{errors[9]:.3f}",
+            f"{errors[int(len(sample_sizes)*0.25)]:.3f}",
+            f"{errors[int(len(sample_sizes)*0.5)]:.3f}",
+            f"{errors[-1]:.3f}"
         ])
 
     x_center = (ax.get_xlim()[0] + ax.get_xlim()[1]) * 0.5
     y_center = (ax.get_ylim()[0] + ax.get_ylim()[1]) * 0.5
-    ax.text(x_center, y_center, eq, color="Black", alpha=0.5, fontsize=17, ha="center", va="center")
-        
+    # ax.text(x_center, y_center, eq, color="Black", alpha=0.5, fontsize=17, ha="center", va="center")    
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     plt.title('Sampling error')
     plt.ylabel('SamplingError (%)')
     plt.xlabel('Sample Size (N)')
@@ -101,10 +104,12 @@ def plotSamplingError(metrics_data, metric = 'accuracy'):
     plt.grid(visible=True, color=c_grey, linestyle='--', linewidth=0.5, alpha=0.7)
     plt.legend()
     plt.tight_layout()
-    plt.savefig(os.path.join(analysis_path,f"sampling_error.png"))
+    extra_title = f"_{title_tag}" if title_tag else ""
+    plt.savefig(os.path.join(analysis_path,f"sampling_error{extra_title}.png"))
 
     log(f"\nSummary Table of {metric.title()} Sampling Errors (%):")
-    logTable(row_data, analysis_path, f"{metric.title()} Sampling Errors", colalign=['left', 'right', 'right', 'right', 'right', 'right', 'right'])
+    table_title = f"{metric.title()} Sampling Errors {title_tag.replace('_',' ').title()}"
+    logTable(row_data=row_data, output_path=f"{analysis_path}/tables", filename=table_title, colalign=['left', 'right', 'right', 'right', 'right', 'right', 'right'])
 
     if only_store:
         plt.close()
@@ -116,7 +121,7 @@ def plotSamplingError(metrics_data, metric = 'accuracy'):
     - Skewness (median-mean correspondance)
     - The Shapiro-Wilk test: https://es.wikipedia.org/wiki/Prueba_de_Shapiro-Wilk
 """
-def normalityTest(metrics_data, metric = 'accuracy'):
+def normalityTest(metrics_data, metric = 'accuracy', title_tag=''):
     metric_data = {}
     log("Data available is:")
     for model, data in metrics_data.items():
@@ -134,7 +139,8 @@ def normalityTest(metrics_data, metric = 'accuracy'):
                          f"{p_valor:.4f}"])
 
     log(f"\nSummary Table of {metric.title()} Shapiro-Wilk normality test:")
-    logTable(row_data, analysis_path, f"{metric.title()} Normality test", colalign=['left', 'right', 'right', 'right', 'right', 'right'])
+    titletag = "" if title_tag == '' else f" {title_tag.replace('_',' ').title()}"
+    logTable(row_data, f"{analysis_path}/tables", f"{metric.title()} Normality test{titletag}", colalign=['left', 'right', 'right', 'right', 'right', 'right'])
 
 
 def normal_amplitude(data):
@@ -158,11 +164,11 @@ def gamma_amplitude(data):
 """
     Computes max amplitude
 """
-def maxAmplitude(metrics_data, metric='accuracy', unit=" (%)", format='.3f', amplitude_function = normal_amplitude):
+def maxAmplitude(metrics_data, metric='accuracy', unit=" (%)", unit_multiplier=100, format='.3f', amplitude_function = normal_amplitude, title_tag=''):
     metric_data = {}
     log("Data available is:")
     for model, data in metrics_data.items():
-        metric_data[model] = [entry[metric]*100 for entry in metrics_data[model].values()]
+        metric_data[model] = [entry[metric]*unit_multiplier for entry in metrics_data[model].values()]
         
     row_data = [['Model', f'mean{unit}', f'min{unit}', f'max{unit}', f'Data Amplitude{unit}', f'Amplitude 99.9% Interval Distribution{unit}']]
     for model_name, data in metric_data.items():
@@ -179,10 +185,10 @@ def maxAmplitude(metrics_data, metric='accuracy', unit=" (%)", format='.3f', amp
     row_data_sorted.insert(0, row_data[0])  # Agregar la fila de encabezado al inicio
 
     log(f"\nSummary {metric.title()} max amplitude:")
-    logTable(row_data_sorted, analysis_path, f"{metric.title()} Max amplitude", colalign=['left', 'right', 'right', 'right'])
+    logTable(row_data_sorted, f"{analysis_path}/tables", f"{metric.title()} Max amplitude {title_tag.replace('_',' ').title()}", colalign=['left', 'right', 'right', 'right'])
 
 
-def count_trials(metrics_data):
+def count_trials(metrics_data, title_tag=''):
 
     row_data = [['Model''N']]
     metric_data = {}
@@ -193,7 +199,7 @@ def count_trials(metrics_data):
         row_data.append([model_name,len(data)])        
 
     log(f"\nTrials on each model:")
-    logTable(row_data, analysis_path, f"N trials on each model")
+    logTable(row_data, f"{analysis_path}/tables", f"N trials on each model {title_tag.replace('_',' ').title()}")
 
 """
     Penalizes the proximity of elements in a subset to get a distribution with more spread data
@@ -280,9 +286,9 @@ def biased_resample(data, target_mean, target_std, subset_size, max_iter=30000,
     Plots biaserd distributions (same normal with mean and std) with all data centered,
     or no data at right side or left side
 """
-def plot_example_distributions(metrics_data, new_sample_size=50, analysis_path=analysis_path):
+def plot_example_distributions(metrics_data, new_sample_size=50, analysis_path=analysis_path, vertical_lines_acc=[99.57],model='CNN_14L'):
     
-    data = np.array([entry['accuracy']*100 for entry in metrics_data['CNN_14L'].values()])
+    data = np.array([entry['accuracy']*100 for entry in metrics_data[model].values()])
     mean = np.mean(data)
     std = np.std(data)
     log(f"[plot_example_distributions] Original data mean: {mean:.2f}, std: {std:.2f}. Max: {np.max(data):.2f}, Min: {np.min(data):.2f}, N: {len(data)}")
@@ -291,58 +297,78 @@ def plot_example_distributions(metrics_data, new_sample_size=50, analysis_path=a
     data_right_bias = data[data < (mean + std*0.5)]
     resampled_right_bias = biased_resample(data_right_bias, target_mean=mean, target_std=std, subset_size=new_sample_size)
     log(f"[plot_example_distributions] Resampled data mean: {np.mean(resampled_right_bias):.2f}, std: {np.std(resampled_right_bias):.2f}. Max: {np.max(data_right_bias):.2f}, Min: {np.min(data_right_bias):.2f}, N: {len(data_right_bias)}")
-    plot_metric_distribution({'CNN_14L': resampled_right_bias}, metric_label='Accuracy (%)', color_palette=[c_red], analysis_path=analysis_path, plot_filename="example_CNN_14L_right_biased", plot_mean=mean, plot_std=std)
+    plot_metric_distribution({model: resampled_right_bias}, metric_label='Accuracy (%)', color_palette=[c_red], vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path, plot_filename="example_CNN_14L_right_biased", plot_mean=mean, plot_std=std)
     log(f"[plot_example_distributions] Plot resampled distribution with right bias")
 
     data_centered_bias = data[(data < (mean + std*1.4)) & (data > (mean - std*1.4))]
     resampled_centered_bias = biased_resample(data_centered_bias, target_mean=mean, target_std=std, subset_size=new_sample_size, alpha_std=1.0)
     log(f"[plot_example_distributions] Resampled data mean: {np.mean(resampled_centered_bias):.2f}, std: {np.std(resampled_centered_bias):.2f}. Max: {np.max(data_centered_bias):.2f}, Min: {np.min(data_centered_bias):.2f}, N: {len(data_centered_bias)}")
-    plot_metric_distribution({'CNN_14L': resampled_centered_bias}, metric_label='Accuracy (%)', color_palette=[c_yellow], analysis_path=analysis_path, plot_filename="example_CNN_14L_center_biased", plot_mean=mean, plot_std=std)
+    plot_metric_distribution({model: resampled_centered_bias}, metric_label='Accuracy (%)', color_palette=[c_yellow], analysis_path=analysis_path, plot_filename="example_CNN_14L_center_biased", plot_mean=mean, plot_std=std)
     log(f"[plot_example_distributions] Plot resampled distribution with centered bias")
     
     data_left_bias = data[data > (mean - std*0.5)]
     resampled_left_bias = biased_resample(data_left_bias, target_mean=mean, target_std=std, subset_size=new_sample_size)
     log(f"[plot_example_distributions] Resampled data mean: {np.mean(resampled_left_bias):.2f}, std: {np.std(resampled_left_bias):.2f}. Max: {np.max(data_left_bias):.2f}, Min: {np.min(data_left_bias):.2f}, N: {len(data_left_bias)}")
-    plot_metric_distribution({'CNN_14L': resampled_left_bias}, metric_label='Accuracy (%)', color_palette=[c_green], analysis_path=analysis_path, plot_filename="ezample_CNN_14L_left_biased", plot_mean=mean, plot_std=std)
+    plot_metric_distribution({model: resampled_left_bias}, metric_label='Accuracy (%)', color_palette=[c_green], analysis_path=analysis_path, plot_filename="example_CNN_14L_left_biased", plot_mean=mean, plot_std=std)
     log(f"[plot_example_distributions] Plot resampled distribution with left bias")
     
 
 if __name__ == "__main__":
-    os.makedirs(analysis_path, exist_ok=True)
-    plt.rcParams.update({'font.size': 18})
+    os.makedirs(f"{analysis_path}/tables", exist_ok=True)
     metrics_data = getAllModelData(output_path)
 
     all_models = metrics_data.keys()
     log(f"Model availability: {all_models}")
     # log(f"{metrics_data = }")
     
-    plot_example_distributions(metrics_data, new_sample_size=60, analysis_path=analysis_path)
-    exit()
+    
+    ablation_metrics = getAblationModelData(ablation_data_file)
+    ablatipon_models = ablation_metrics.keys()
+
+    if ablation_metrics:
+        plotDataDistribution(metrics_data=ablation_metrics,
+                            models_plot_list=[ablatipon_models],
+                            color_list=[color_palette_list],
+                            analysis_path=analysis_path)
+        plotSamplingError(metrics_data=ablation_metrics, title_tag='ablation')
+        normalityTest(metrics_data=ablation_metrics, title_tag='ablation')
+        maxAmplitude(metrics_data=ablation_metrics, title_tag='ablation')
+        maxAmplitude(metrics_data=ablation_metrics, metric='train_duration', unit=' (s)', unit_multiplier=1, format='.1f', amplitude_function=gamma_amplitude, title_tag='ablation')
+        maxAmplitude(metrics_data=ablation_metrics, metric='best_epoch', unit='', unit_multiplier=1, format='.0f', amplitude_function=gamma_amplitude, title_tag='ablation')
+
+        count_trials(metrics_data=ablation_metrics, title_tag='ablation')
 
     # Once all models' metrics have been gathered, plot the distributions
     if metrics_data:
         plotDataDistribution(metrics_data=metrics_data,
                              models_plot_list=[['SimplePerceptron'],
                                ['DNN_6L', 'HiddenLayerPerceptron'],
-                               ['CNN_5L', 'CNN_3L', 'CNN_14L', 'CNN_4L'],
-                               ['CNN_14L_B10', 'CNN_14L', 'CNN_14L_B25', 'CNN_14L_B50'],
+                               ['CNN_3L', 'CNN_4L', 'CNN_5L', 'CNN_14L'],
+                               ['CNN_14L', 'CNN_14L_B10', 'CNN_14L_B25', 'CNN_14L_B50'],
                                all_models],
                              color_list=[[c_green],
                                [c_blue,c_darkgrey],
-                               [c_yellow, c_red, c_purple, c_grey],
-                               [c_yellow, c_red, c_purple, c_grey],
+                               [c_yellow, c_grey, c_red, c_purple], 
+                               [c_purple, c_yellow, c_red, c_grey],
                                color_palette_list],
                              analysis_path = analysis_path)
-        # plotParamAmplitudeRelation(metrics_data)
-        plotSamplingError(metrics_data)
-        normalityTest(metrics_data)
-        maxAmplitude(metrics_data)
         
-        maxAmplitude(metrics_data, 'train_duration', unit=' (s)', format='.1f', amplitude_function=gamma_amplitude)
-        maxAmplitude(metrics_data, 'best_epoch', unit='', format='.0f', amplitude_function=gamma_amplitude)
 
-        count_trials(metrics_data)
+        # plotParamAmplitudeRelation(metrics_data)
+        plotSamplingError(metrics_data=metrics_data)
 
+        plotSamplingError(metrics_data=metrics_data, title_tag='informed_training', plot_models=['SimplePerceptron','CNN_3L', 'CNN_4L', 'CNN_5L', 'CNN_14L'], color_list=[c_green, c_yellow, c_grey, c_red, c_purple])
+        plotSamplingError(metrics_data=metrics_data, title_tag='CNN_14L_variations', plot_models=['CNN_14L_B10', 'CNN_14L', 'CNN_14L_B25', 'CNN_14L_B50'])
+        
+        normalityTest(metrics_data=metrics_data)
+        maxAmplitude(metrics_data=metrics_data)
+        
+        maxAmplitude(metrics_data=metrics_data, metric='train_duration', unit=' (s)', unit_multiplier=1, format='.1f', amplitude_function=gamma_amplitude)
+        maxAmplitude(metrics_data=metrics_data, metric='best_epoch', unit='', unit_multiplier=1, format='.0f', amplitude_function=gamma_amplitude)
+
+        count_trials(metrics_data=metrics_data)
+
+        plot_example_distributions(metrics_data=metrics_data, new_sample_size=60, analysis_path=analysis_path)
 
         print(f"Search Juyang (John) Weng for info about initialization bias and similar stuff https://www.google.com/search?client=ubuntu&channel=fs&q=Juyang+%28John%29+Weng")
     else:
