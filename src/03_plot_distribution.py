@@ -52,7 +52,7 @@ def plotParamAmplitudeRelation(metrics_data, title_tag=''):
 
     # Mostrar la gráfica
     plt.grid(True)
-    plt.savefig(os.path.join(analysis_path,f"amplitude_relation_{title_tag}.png"))
+    plt.savefig(os.path.join(analysis_path,f"amplitude_relation_{title_tag}.pdf"), format="pdf")
 
     if only_store:
         plt.close()
@@ -105,7 +105,7 @@ def plotSamplingError(metrics_data, metric = 'accuracy', title_tag='', plot_mode
     plt.legend()
     plt.tight_layout()
     extra_title = f"_{title_tag}" if title_tag else ""
-    plt.savefig(os.path.join(analysis_path,f"sampling_error{extra_title}.png"))
+    plt.savefig(os.path.join(analysis_path,f"sampling_error{extra_title}.pdf"), format="pdf")
 
     log(f"\nSummary Table of {metric.title()} Sampling Errors (%):")
     table_title = f"{metric.title()} Sampling Errors {title_tag.replace('_',' ').title()}"
@@ -342,11 +342,13 @@ if __name__ == "__main__":
     if metrics_data:
         plotDataDistribution(metrics_data=metrics_data,
                              models_plot_list=[['SimplePerceptron'],
+                               ['CNN_14L'],
                                ['DNN_6L', 'HiddenLayerPerceptron'],
                                ['CNN_3L', 'CNN_4L', 'CNN_5L', 'CNN_14L'],
                                ['CNN_14L', 'CNN_14L_B10', 'CNN_14L_B25', 'CNN_14L_B50'],
                                all_models],
                              color_list=[[c_green],
+                               [c_purple],
                                [c_blue,c_darkgrey],
                                [c_yellow, c_grey, c_red, c_purple], 
                                [c_purple, c_yellow, c_red, c_grey],

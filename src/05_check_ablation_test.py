@@ -5,6 +5,8 @@ import os
 import re
 import csv
 
+from tqdm import tqdm
+
 import itertools
 import copy
 import numpy as np
@@ -17,12 +19,19 @@ from statsmodels.formula.api import ols, mixedlm
 from scipy.stats import kendalltau, rankdata
 
 
+from utils.log_utils import log, logTable, c_blue, c_green, c_yellow, c_red, c_purple, c_grey, c_darkgrey, color_palette_list
 from utils.log_utils import log, logTable, color_palette_list, bcolors
 from utils.yaml_utils import getMetricsLogFile
 from utils.plot_distribution import plotDataDistribution
 from models.BatchSizeStudy import CNN_14L_B10, CNN_14L_B25, CNN_14L_B50, CNN_14L_B80
 from models import CNN_14L
 from utils import output_path, ablation_data_file
+from utils.compute_switched_probability import computeSwtichedProbability
+
+
+montecarlo_samples = 20000 # Slow version :) -> 1000000
+bootstrap_samples = 20000 # Slow version :) -> 100000
+
 
 anova_table_analysis = True
 mixedlm_analysis = False
@@ -94,8 +103,8 @@ def generate_interaction_plot(df, x_var, y_var, hue_var, title, **kwargs):
     plt.tight_layout()
     # plt.show()
     
-    plt.savefig(os.path.join(analysis_path, f'interaction_plot_{x_var}_{y_var}_{hue_var}.png'))
-    log(f"Saved interaction plot: {os.path.join(analysis_path, f'interaction_plot_{x_var}_{y_var}_{hue_var}.png')}", color=bcolors.OKGREEN)
+    plt.savefig(os.path.join(analysis_path, f'interaction_plot_{x_var}_{y_var}_{hue_var}.pdf'), format="pdf")
+    log(f"Saved interaction plot: {os.path.join(analysis_path, f'interaction_plot_{x_var}_{y_var}_{hue_var}.pdf')}", color=bcolors.OKGREEN)
 
 
 def plotScaterplot(pivot_df, output_path='.', filename='scatterplot_conditions'):
@@ -110,13 +119,127 @@ def plotScaterplot(pivot_df, output_path='.', filename='scatterplot_conditions')
         plt.title(f'Accuracy: {cond1} vs {cond2}')
         plt.xlabel(cond1)
         plt.ylabel(cond2)
-        plot_filename = f'{filename}_{cond1}_vs_{cond2}.png'
+        plot_filename = f'{filename}_{cond1}_vs_{cond2}.pdf'
         filepath = os.path.join(output_path, plot_filename)
         plt.tight_layout()
-        plt.savefig(filepath, bbox_inches='tight')
+        plt.savefig(filepath, format="pdf", bbox_inches='tight')
         plt.close()
 
     print(f"Plots guardados en: {output_path}")
+
+
+"""
+    Simulates decission tree based on an ablation test with provided data (with three learning rates and three batch sizes levels).
+    After the number of iterations provided it computes probability of reaching the best combination of hyperparameters.
+"""
+def computeDecisionErrorTemplate(df, start_lr = None, start_batch = None, sampling_method = None, iterations=montecarlo_samples):
+
+    batch_list = df['batch_size'].unique()
+    lr_list = df['learning_rate'].unique()
+    
+    best_overall_trial = df.loc[df['accuracy'].idxmax()]
+    best_trial_batch = best_overall_trial['batch_size']
+    best_trial_lr = best_overall_trial['learning_rate']
+    
+    ok_samples = 0
+    no_ok_samples = 0
+
+    for it in tqdm(range(iterations), desc="Running iterations", leave=False):
+        if start_lr is not None or start_batch is not None:
+            
+            first_param, second_param = (
+                ('batch_size', 'learning_rate') if start_batch is not None else ('learning_rate', 'batch_size')
+            )
+            first_value = start_batch if start_batch is not None else start_lr
+
+            # print(f"Iteration {it+1}/{iterations}: Starting with {first_param}={first_value}")
+            df_first_step = df[df[first_param] == first_value][['index', second_param, 'accuracy']]
+            best_first_level = None
+            best_first_acc = -float('inf')
+
+            for val in (batch_list if second_param == 'batch_size' else lr_list):
+                data = df_first_step[df_first_step[second_param] == val]['accuracy'].values
+                # print(f"First sampling data for {first_param}={first_value}, {second_param}={val}: {len(data)} samples.")
+                sample = sampling_method(
+                    df_first_step[df_first_step[second_param] == val]['accuracy'].values, 1
+                )
+                if sample > best_first_acc:
+                    best_first_acc = sample
+                    best_first_level = val
+
+            df_second_step = df[df[second_param] == best_first_level][['index', first_param, 'accuracy']]
+            best_second_level = None
+            best_second_acc = -float('inf')
+
+            for val in (lr_list if first_param == 'learning_rate' else batch_list):
+                data = df_second_step[df_second_step[first_param] == val]['accuracy'].values
+                # print(f"Second sampling data for {first_param}={first_value}, {second_param}={val}: {len(data)} samples.")
+                sample = sampling_method(
+                    df_second_step[df_second_step[first_param] == val]['accuracy'].values, 1
+                )
+                if sample > best_second_acc:
+                    best_second_acc = sample
+                    best_second_level = val
+
+            if first_param == "learning_rate" and best_second_level == best_trial_lr and \
+               second_param == "batch_size" and best_first_level == best_trial_batch or \
+               first_param == "batch_size" and best_second_level == best_trial_batch and \
+               second_param == "learning_rate" and best_first_level == best_trial_lr:
+                ok_samples += 1
+                # tqdm.write("OK sample found!")
+            else:
+                no_ok_samples += 1
+
+            # tqdm.write(f"Sampled best: {first_param}={best_first_level}, {second_param}={best_second_level} | True best: batch_size={best_trial_batch}, learning_rate={best_trial_lr}")
+            # print(f"Sampled best: {first_param}={best_first_level}, {second_param}={best_second_level} | True best: batch_size={best_trial_batch}, learning_rate={best_trial_lr}")
+            # exit()
+
+    p_ok = ok_samples / (ok_samples + no_ok_samples)
+    p_no_ok = no_ok_samples / (ok_samples + no_ok_samples)
+
+    return p_ok, p_no_ok
+
+"""
+    Simulates the ablation decission tree: fixing one of the hyperparams chechs all levels of the other one;
+    once the best has been selected, checks all levels of the first hyperparam to select the best overall.
+    This simulation is made with both monte carlo and bootstrap sampling methods starting with all three levels
+    of learning rate and batch size previously trained.
+
+    @see computeDecisionErrorTemplate
+"""
+def computeAblationDecisionErrorProbability(df):
+    log(f"Analysis of ablation decision error probability:", color=bcolors.OKGREEN)
+
+    lr_list = df['learning_rate'].unique()
+    batch_list = df['batch_size'].unique()
+    
+    table_data = [['Fixed Param', 'Start Value', 'MonteCarlo', 'Bootstrap']]
+    for start_batch in batch_list:
+        log(f"Estimation Ablation Decision error starting with fixed batch {start_batch}:", color=bcolors.OKCYAN)
+        
+        montecarlo_sampling = lambda sampling_data, n_samples: np.random.normal(loc=np.mean(sampling_data), scale=np.std(sampling_data), size=n_samples)
+        montecarlo_p_ok, montecarlo_p_no_ok = computeDecisionErrorTemplate(df=df, start_batch=start_batch, sampling_method=montecarlo_sampling, iterations=montecarlo_samples)
+        log(f"  · MonteCarlo ({montecarlo_samples} iterations): p_ok={montecarlo_p_ok:.4f}, p_no_ok={montecarlo_p_no_ok:.4f}")
+        
+        bootstrap_sampling = lambda sampling_data, n_samples: np.random.choice(sampling_data, size=n_samples, replace=True)
+        bootstrap_p_ok, bootstrap_p_no_ok = computeDecisionErrorTemplate(df=df, start_batch=start_batch, sampling_method=bootstrap_sampling, iterations=bootstrap_samples)
+        log(f"  · Bootstrap ({bootstrap_samples} iterations): p_ok={bootstrap_p_ok:.4f}, p_no_ok={bootstrap_p_no_ok:.4f}")
+        table_data.append(['Batch Size', start_batch, f"{montecarlo_p_no_ok:.4f}", f"{bootstrap_p_no_ok:.4f}"])
+
+    for start_lr in lr_list:
+        log(f"Estimation Ablation Decision error  starting with fixed lr {start_lr}:", color=bcolors.OKCYAN)
+        
+        montecarlo_sampling = lambda sampling_data, n_samples: np.random.normal(loc=np.mean(sampling_data), scale=np.std(sampling_data), size=n_samples)
+        montecarlo_p_ok, montecarlo_p_no_ok = computeDecisionErrorTemplate(df=df, start_lr=start_lr, sampling_method=montecarlo_sampling, iterations=montecarlo_samples)
+        log(f"  · MonteCarlo ({montecarlo_samples} iterations): p_ok={montecarlo_p_ok:.4f}, p_no_ok={montecarlo_p_no_ok:.4f}")
+        
+        bootstrap_sampling = lambda sampling_data, n_samples: np.random.choice(sampling_data, size=n_samples, replace=True)
+        bootstrap_p_ok, bootstrap_p_no_ok = computeDecisionErrorTemplate(df=df, start_lr=start_lr, sampling_method=bootstrap_sampling, iterations=bootstrap_samples)
+        log(f"  · Bootstrap ({bootstrap_samples} iterations): p_ok={bootstrap_p_ok:.4f}, p_no_ok={bootstrap_p_no_ok:.4f}")
+        table_data.append(['Learning Rate', start_lr, f"{montecarlo_p_no_ok:.4f}", f"{bootstrap_p_no_ok:.4f}"])
+
+
+    logTable(table_data, os.path.join(analysis_path, 'tables'), f'ablation_decision_error_probability', screen_log = True)
 
 if __name__ == "__main__":
     os.makedirs(os.path.join(analysis_path, 'tables'), exist_ok=True)
@@ -148,6 +271,7 @@ if __name__ == "__main__":
         ablation_row = [index, seed, batchs, learningr, accuracy]
         
         return ablation_row, log_ablation_row, time
+
 
     for key, iteration in ablation_metrics.items():
         for trial_idx, (condition, trial) in enumerate(iteration.items()):
@@ -430,7 +554,7 @@ if __name__ == "__main__":
         # plt.xticks(rotation=45, ha='right') # Rotate labels for better readability
         plt.grid(axis='y', linestyle='--', alpha=0.7)
         plt.tight_layout()
-        plt.savefig(os.path.join(analysis_path, 'best_hp_combination_per_seed_bar_chart.png'))
+        plt.savefig(os.path.join(analysis_path, 'best_hp_combination_per_seed_bar_chart.pdf'), format='pdf')
 
     ########################################################################
     ##   Analysis: Kendall's W (Consistency of HP Combination Rankings)   ##
@@ -542,3 +666,48 @@ if __name__ == "__main__":
         subset = df[df['learning_rate'] == 0.01]
         ordered_categories = subset.groupby('index', observed=False)['accuracy'].mean().sort_values().index.tolist()
         generate_interaction_plot(df, 'index', 'accuracy', 'learning_rate', 'Interation Plot: Index vs Accuracy by Learning Rate', order=ordered_categories)
+
+
+    # Plot distributions to check error probability
+    metrics_data = {}
+    all_models = set()
+    for _, row in df.iterrows():
+        condition = f"{int(row['batch_size'])}-{row['learning_rate']}"
+        key = str(row['seed'])
+        if condition not in metrics_data:
+            metrics_data[condition] = {}
+        metrics_data[condition][key] = {'accuracy': row['accuracy']/100.0}
+        all_models.add(condition)
+
+
+    log(f"\nPlotting Data Distributions for Ablation Study", color=bcolors.OKCYAN)
+    plotDataDistribution(metrics_data=metrics_data,
+                        models_plot_list=[
+                        ['10-0.001', '10-0.005', '10-0.01'],
+                        ['40-0.001', '40-0.005', '40-0.01'],
+                        ['70-0.001', '70-0.005', '70-0.01'],
+                        ['10-0.001', '40-0.001', '70-0.001'],
+                        ['10-0.005', '40-0.005', '70-0.005'],
+                        ['10-0.01', '40-0.01', '70-0.01'],
+                        all_models],
+                            color_list=[
+                            [c_purple, c_yellow, c_grey],
+                            [c_purple, c_yellow, c_grey],
+                            [c_purple, c_yellow, c_grey],
+                            [c_purple, c_yellow, c_grey],
+                            [c_purple, c_yellow, c_grey],
+                            [c_purple, c_yellow, c_grey],
+                            color_palette_list],
+                            analysis_path = analysis_path,
+                            single_plots = False)
+    
+
+    accuracy_data = {}
+    for model, data in metrics_data.items():
+        accuracy_data[model] = [entry['accuracy']*100 for entry in metrics_data[model].values()]
+    computeSwtichedProbability(accuracy_data, ['10-0.001', '10-0.005', '10-0.01',
+                                                '40-0.001', '40-0.005', '40-0.01',
+                                                '70-0.001', '70-0.005', '70-0.01'])
+
+
+    computeAblationDecisionErrorProbability(df)

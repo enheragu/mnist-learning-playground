@@ -114,10 +114,10 @@ def plot_metric_distribution(metrics_data, train_duration_data = None, metric_la
     plt.tight_layout()
 
     if plot_filename is not None:
-        path_name = os.path.join(analysis_path, f"{plot_filename}.png")
+        path_name = os.path.join(analysis_path, f"{plot_filename}.pdf")
     else:
-        path_name = os.path.join(analysis_path,f"plot_{metric_label.replace(' (%)','').replace(' (s)','').replace(' ','_').lower()}_{'_'.join(list(metrics_data.keys()))}.png")
-    plt.savefig(path_name)
+        path_name = os.path.join(analysis_path,f"plot_{metric_label.replace(' (%)','').replace(' (s)','').replace(' ','_').lower()}_{'_'.join(list(metrics_data.keys()))}.pdf")
+    plt.savefig(path_name, format="pdf")
     # print(f"\t· Stored file in {path_name}")
 
     if only_store:
@@ -127,7 +127,7 @@ def plot_metric_distribution(metrics_data, train_duration_data = None, metric_la
     Intermediate function to handle each distribution plot wanted
 """
 def plotDataDistribution(metrics_data, models_plot_list = [[]], color_list = color_palette_list, 
-                         vertical_lines_acc = [], analysis_path=None):
+                         vertical_lines_acc = [], analysis_path=None, single_plots = True):
     
     if analysis_path is None:
         log(f"[Error] [plotDataDistribution] no analysis_path was provided for plots {models_plot_list = }")
@@ -135,33 +135,59 @@ def plotDataDistribution(metrics_data, models_plot_list = [[]], color_list = col
     
     color_iterator = itertools.cycle([color_palette_list])
 
-    # Plot all models in single plot
-    for index, (model, data) in enumerate(metrics_data.items()):
-        color = next(color_iterator)
-        accuracy_data = {model: [entry['accuracy']*100 for entry in metrics_data[model].values()]}
-        train_duration_data = {model: [entry['train_duration'] for entry in metrics_data[model].values()]}
-        best_epoch_data = {model: [entry['best_epoch'] for entry in metrics_data[model].values()]}
+    train_duration_data = None # default
+    plot_train_duration = metrics_data is not None and 'train_duration' in list(list(metrics_data.values())[0].values())[0].keys()
+    plot_best_epoch = metrics_data is not None and 'best_epoch' in list(list(metrics_data.values())[0].values())[0].keys()
+    
+    # if plot_train_duration:
+    #     print(f"Plot train duration will be printed for {models_plot_list}")
+    # else:
+    #     print(f"Plot train duration will NOT be printed for {models_plot_list}")
+    # if plot_best_epoch:
+    #     print(f"Plot best epoch will be printed for {models_plot_list}")
+    # else:
+    #     print(f"Plot best epoch will NOT be printed for {models_plot_list}")
 
-        plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch', plot_func=plot_metric_gammadistribution, color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
-        plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)', plot_func=plot_metric_gammadistribution, color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
-        plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'Accuracy (%)', color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
+    # Plot all models in single plot
+    if single_plots:
+        for index, (model, data) in enumerate(metrics_data.items()):
+            color = next(color_iterator)
+            accuracy_data = {model: [entry['accuracy']*100 for entry in metrics_data[model].values()]}
+            
+            if plot_best_epoch:
+                best_epoch_data = {model: [entry['best_epoch'] for entry in metrics_data[model].values()]}
+                plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch', plot_func=plot_metric_gammadistribution, color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
+            
+            if plot_train_duration:
+                train_duration_data = {model: [entry['train_duration'] for entry in metrics_data[model].values()]}
+                plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)', plot_func=plot_metric_gammadistribution, color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)        
+        
+
+            plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'Accuracy (%)', color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
 
     for plot, color_scheme in zip(models_plot_list, color_list):
         print(f"Generating plot for {plot} model{'s' if len(plot)>1 else ''}")
         accuracy_data = OrderedDict()
-        train_duration_data = OrderedDict()
-        best_epoch_data = OrderedDict()
+        if plot_train_duration: 
+            train_duration_data = OrderedDict()
+        if plot_best_epoch: 
+            best_epoch_data = OrderedDict()
 
         for model in plot:
             if model in metrics_data.keys():
                 accuracy_data[model] = [entry['accuracy']*100 for entry in metrics_data[model].values()]
-                train_duration_data[model] = [entry['train_duration'] for entry in metrics_data[model].values()]
-                best_epoch_data[model] = [entry['best_epoch'] for entry in metrics_data[model].values()]
+                if plot_train_duration: 
+                    train_duration_data[model] = [entry['train_duration'] for entry in metrics_data[model].values()]
+                if plot_best_epoch: 
+                    best_epoch_data[model] = [entry['best_epoch'] for entry in metrics_data[model].values()]
             else:
                 print(f"\t· [WARNING] {model} not in metrics available: {metrics_data.keys()}")
 
-        plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch', plot_func=plot_metric_gammadistribution, color_palette=color_scheme, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
-        plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)', plot_func=plot_metric_gammadistribution, color_palette=color_scheme, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
+        if plot_train_duration: 
+            plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)', plot_func=plot_metric_gammadistribution, color_palette=color_scheme, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
+        if plot_best_epoch: 
+            plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch', plot_func=plot_metric_gammadistribution, color_palette=color_scheme, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
+        
         plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'Accuracy (%)', color_palette=color_scheme, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
         
     # plt.show()
