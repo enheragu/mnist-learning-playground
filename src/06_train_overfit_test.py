@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+# encoding: utf-8
+
+"""
+    Evaluates a set of models for a given number of train trials
+"""
+
+import os
+import sys 
+import re
+import random
+import traceback 
+from collections import Counter
+
+from torch.utils.data import DataLoader, Subset
+from torchvision import datasets, transforms
+
+
+from utils.log_utils import log, logTable
+from utils.yaml_utils import updateMetricsLogFile, getMetricsLogFile
+from utils.set_seed import set_seed
+from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L, BatchNormMaxoutNetInNet
+from models.BatchSizeStudy import CNN_14L_B10, CNN_14L_B25, CNN_14L_B50, CNN_14L_B80
+from utils import output_path
+
+# How many train loops are executed to study its variance
+sameseed = False
+
+# General configuration
+input_size = 28 * 28  # Size of each image flattened
+num_classes = 10  # Numbers from 0 to 9
+learning_rate = 0.1
+patience = 40
+num_epochs = 150
+
+# Use percentaje of total dataset
+overfit_reduction = 0.02 # 2% (in both test and train)
+
+# Dict with how many iterations to be performed with each model
+# The number is the total iterations to have stored on each CFG file
+model_iterations = {CNN_14L: 400,
+                    DNN_6L: 400}
+
+
+if __name__ == "__main__":
+    seed = 0
+    metrics = []
+    
+    updated = True # Flag to control out of loop
+    exception_messages = ""
+    while updated:
+        updated = False
+        for ModelClass, num_iter in model_iterations.items():
+            try:                
+                metrics_log_file = os.path.join(output_path, f"{ModelClass.__name__}_overfit_{overfit_reduction}", f"{'sameseed_' if sameseed else 'randomseed_'}training_metrics.yaml")
+                metrics = getMetricsLogFile(metrics_log_file)
+                date_pattern = re.compile(r'^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.\d{3}$') 
+                iteration = sum(1 for key in metrics.keys() if date_pattern.match(key))
+                if iteration < num_iter:
+    
+                    if not sameseed:
+                        seed = random.randint(0, 2**32 - 1)  # Random 32 bits number
+
+                    log(f"[{ModelClass.__name__}] Iteration: {iteration}/{num_iter}")
+                    set_seed(seed)
+
+                    # Load MNIST dataset
+                    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
+                    train_dataset = datasets.MNIST(root='./data', train=True, transform=transform, download=True)
+                    test_dataset = datasets.MNIST(root='./data', train=False, transform=transform, download=True)
+                    
+                    n_train = int(len(train_dataset) * overfit_reduction)
+                    n_test  = int(len(test_dataset) * overfit_reduction)
+
+                    train_dataset_small = Subset(train_dataset, list(range(n_train)))
+                    test_dataset_small  = Subset(test_dataset,  list(range(n_test)))
+
+                    log(f"Using {overfit_reduction*100}% of dataset → {n_train} train, {n_test} test images")
+                    log(f"Dataset includes originally: train_dataset: {len(train_dataset)} images; test_dataset: {len(test_dataset)} images")
+                    log(f"Dataset reduced: train_dataset_small: {len(train_dataset_small)} images; test_dataset_small: {len(test_dataset_small)} images")
+
+                    train_labels = [train_dataset.targets[i].item() for i in range(n_train)]
+                    log(f"Train class distribution: {dict(Counter(train_labels))}")
+                    test_labels = [test_dataset.targets[i].item() for i in range(n_test)]
+                    log(f"Test class distribution: {dict(Counter(test_labels))}")
+
+                    # Init model, loss and optimizer
+                    # Create custom output path for overfit test (so .pth files go to the correct folder)
+                    model_output_path = os.path.join(output_path, f"{ModelClass.__name__}_overfit_{overfit_reduction}")
+                    os.makedirs(model_output_path, exist_ok=True)
+                    model = ModelClass(input_size=input_size, num_classes=num_classes, learning_rate=learning_rate, patience=patience, seed=seed, output_path=model_output_path)
+                    model.model_name = ""  # Clear to avoid double subfolder creation
+                    model.output_data_path = model_output_path
+                    model.best_trained_path = os.path.join(model_output_path, f"{os.getpid()}_best_model.pth")
+                    model.model_architecture_path = os.path.join(model_output_path, "model_architecture.pth")
+                    model.save_architecture()
+
+                    train_loader = DataLoader(dataset=train_dataset_small, 
+                                                batch_size=model.batch_size, 
+                                                shuffle=True,
+                                                num_workers=4,
+                                                pin_memory=True)
+                    test_loader = DataLoader(dataset=test_dataset_small, 
+                                                batch_size=model.batch_size, 
+                                                shuffle=False,
+                                                num_workers=2,
+                                                pin_memory=True)
+
+                    metrics = model.spinTrainEval(train_loader, test_loader, num_epochs = num_epochs)
+                    updateMetricsLogFile(metrics, metrics_log_file)
+                    updated = True
+
+            except Exception as e:
+                exception_message = f"Exception catched: {e}: \n{traceback.format_exc()}"
+                exception_messages += f"{exception_message}\n"
+                print(f"[ERROR] --- \n[ERROR] --- \n[ERROR] CATCHED EXCEPTION: {exception_message}. \n")
+
+                # traceback.print_exception() 
+                # traceback.print_exception(*sys.exc_info()) 
+                print(F"[ERROR] --- \n[ERROR] --- \n")
+
+    print(f"Finished all iterations configured for all models")
+    if exception_messages != "": print(f"[ERROR] Exceptions catched during execution: {exception_messages}")

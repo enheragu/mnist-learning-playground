@@ -42,8 +42,11 @@ class BaseModelTrainer(nn.Module):
             self.best_trained_path = os.path.join(self.output_data_path,f"{os.getpid()}_best_model.pth")
             self.model_architecture_path = os.path.join(self.output_data_path,"model_architecture.pth")
 
-        # List of accuracy on each epoch
-        self.accuracy_each_epoch = []
+        # Lists of metrics on each epoch (for overfitting analysis)
+        self.accuracy_each_epoch = []  # Test accuracy
+        self.train_accuracy_each_epoch = []
+        self.train_loss_each_epoch = []
+        self.test_loss_each_epoch = []
 
     # Entrenamiento del modelo
     def train_model(self, train_loader, test_loader, num_epochs = 500):
@@ -58,6 +61,12 @@ class BaseModelTrainer(nn.Module):
             for epoch in pbar:
                 start_time = time.time()
                 self.train()
+                
+                # Training metrics
+                epoch_train_loss = 0.0
+                epoch_train_correct = 0
+                epoch_train_total = 0
+                
                 for images, labels in train_loader:
                     # Mover los datos a la GPU
                     images, labels = images.to(self.device), labels.to(self.device)
@@ -67,8 +76,23 @@ class BaseModelTrainer(nn.Module):
                     loss = criterion(outputs, labels)
                     loss.backward()
                     optimizer.step()
+                    
+                    # Accumulate training metrics
+                    epoch_train_loss += loss.item() * images.size(0)
+                    _, predicted = torch.max(outputs.data, 1)
+                    epoch_train_total += labels.size(0)
+                    epoch_train_correct += (predicted == labels).sum().item()
+                
+                # Calculate epoch training metrics
+                train_accuracy = epoch_train_correct / epoch_train_total
+                train_loss = epoch_train_loss / epoch_train_total
+                self.train_accuracy_each_epoch.append(train_accuracy)
+                self.train_loss_each_epoch.append(train_loss)
 
-                accuracy = self.evaluate_model(test_loader)['accuracy']
+                # Test metrics
+                test_metrics = self.evaluate_model_with_loss(test_loader, criterion)
+                accuracy = test_metrics['accuracy']
+                self.test_loss_each_epoch.append(test_metrics['loss'])
                 end_time = time.time()
                 epoch_duration = end_time - start_time
                 self.accuracy_each_epoch.append(accuracy)
@@ -97,6 +121,26 @@ class BaseModelTrainer(nn.Module):
 
         best_epoch = epoch - self.patience
         return best_epoch
+
+    def evaluate_model_with_loss(self, test_loader, criterion):
+        """Evaluate model and return accuracy + loss (for overfitting analysis)"""
+        self.eval()
+        total_loss = 0.0
+        total_samples = 0
+        correct = 0
+        with torch.no_grad():
+            for images, labels in test_loader:
+                images, labels = images.to(self.device), labels.to(self.device)
+                outputs = self(images)
+                loss = criterion(outputs, labels)
+                total_loss += loss.item() * images.size(0)
+                total_samples += labels.size(0)
+                _, predicted = torch.max(outputs.data, 1)
+                correct += (predicted == labels).sum().item()
+        return {
+            'accuracy': correct / total_samples,
+            'loss': total_loss / total_samples
+        }
 
     def evaluate_model(self, test_loader, print_log=False):
         self.eval()
@@ -195,6 +239,9 @@ class BaseModelTrainer(nn.Module):
                         'train_duration': train_duration, 
                         'total_epochs': best_epoch+self.patience, 
                         'accuracy_plot': self.accuracy_each_epoch,
+                        'train_accuracy_plot': self.train_accuracy_each_epoch,
+                        'train_loss_plot': self.train_loss_each_epoch,
+                        'test_loss_plot': self.test_loss_each_epoch,
                         'seed': self.seed})
         return {timestamp: metrics}
     

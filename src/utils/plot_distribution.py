@@ -9,7 +9,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy.stats import norm, gamma, shapiro, kurtosis
-from utils.log_utils import log, logTable, c_blue, c_green, c_yellow, c_red, c_purple, c_grey, c_darkgrey, color_palette_list
+from utils.log_utils import log, logTable, bcolors, c_blue, c_green, c_yellow, c_red, c_purple, c_grey, c_darkgrey, color_palette_list
 
 bin_size = 20
 
@@ -31,6 +31,11 @@ def plot_metric_normaldistribution(data_y, ax, color, mean=None, std=None):
             ax.vlines(x=pos, ymin=0, ymax=norm.pdf(pos, mean, std), colors=color, linewidth=linewidth, linestyles=linestyle)
 
 def plot_metric_gammadistribution(data_y, ax, color, mean=None, std=None):
+
+    if np.any(np.array(data_y) <= 0):
+        log(f"⚠️  Invalid data for Gamma distribution: {np.sum(np.array(data_y) <= 0)} values <= 0", color=bcolors.WARNING)
+        return
+    
     # Ajuste de la distribución gamma para el modelo
     shape, loc, scale = gamma.fit(data_y, floc=0)
     x = np.linspace(0, shape * scale * 3, 100)
@@ -125,9 +130,9 @@ def plotDataDistribution(metrics_data, models_plot_list = [['all']], color_list 
         train_duration_data = {model: [entry['train_duration'] for entry in metrics_data[model].values()]}
         best_epoch_data = {model: [entry['best_epoch'] for entry in metrics_data[model].values()]}
 
-        plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch', plot_func=plot_metric_gammadistribution, color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
-        plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)', plot_func=plot_metric_gammadistribution, color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
-        plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'Accuracy (%)', color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
+        plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch', plot_func=plot_metric_gammadistribution, color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=os.path.join(analysis_path,'single_model'))
+        plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)', plot_func=plot_metric_gammadistribution, color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=os.path.join(analysis_path,'single_model'))
+        plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'Accuracy (%)', color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=os.path.join(analysis_path,'single_model'))
 
     for plot, color_scheme in zip(models_plot_list, color_list):
         print(f"Generating plot for {plot} model{'s' if len(plot)>1 else ''}")

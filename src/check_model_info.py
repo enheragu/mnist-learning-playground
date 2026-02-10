@@ -8,7 +8,7 @@ from torchsummary import summary
 
 from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L, BatchNormMaxoutNetInNet
 from models.BatchNormMaxoutNetInNet import MINBlock, MaxOutLayer
-from utils.log_utils import log, logTable, c_blue, c_purple, c_alpha_blue, c_alpha_purple
+from utils.log_utils import log, logTable, c_blue, c_purple, c_alpha_blue, c_alpha_purple, bcolors
 from utils import output_path
 
 analysis_path = './analysis_results/model_info'
@@ -112,16 +112,26 @@ def generate_mermaid_diagram(model, input_size):
 
     return diagram
 
-
-
+def model_brief(model, name=None, bytes_per_param=4, log_screen = True):
+    name = name or model.__class__.__name__
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    mem_mb = total_params * bytes_per_param / 1024**2
+    if log_screen:
+        print(f"{name:20s} | params: {total_params/1e6:7.2f}M "
+            f"| trainable: {trainable/1e6:7.2f}M "
+            f"| mem: {mem_mb:7.1f} MB")
+    return total_params, trainable, mem_mb
 if __name__ == "__main__":
 
     os.makedirs(analysis_path, exist_ok=True)
+    table_data = [["Model", "Total Params (M)", "Trainable Params (M)", "Memory (MB)"]]
     for Model in [SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L, BatchNormMaxoutNetInNet]:
         model = Model(input_size=input_size, num_classes=10, output_path=output_path)
-        log(f"Summary of {model.model_name} model with input size {input_size} for 10 classes classification:")
-        summary(model, input_size=(1, 28, 28))  # Tamaño de entrada: (canales, alto, ancho)
-
+        log(f"Summary of {model.model_name} model with input size {input_size} for 10 classes classification:", color=bcolors.OKCYAN)
+        # summary(model, input_size=(1, 28, 28))  # Tamaño de entrada: (canales, alto, ancho)
+        total_params, trainable_params, mem_mb = model_brief(model, False)
+        table_data.append([model.model_name, f"{total_params}", f"{trainable_params}", f"{mem_mb:7.1f}"])
         diagram = generate_mermaid_diagram(model, (1, 28, 28))
 
         file_path = os.path.join(analysis_path,f"{model.model_name}_diagram.mmd")
@@ -129,3 +139,5 @@ if __name__ == "__main__":
             file.write(diagram)
         
         log(f"Mermaid diagram for {model.model_name} saved to {file_path}.")
+
+    logTable(table_data, analysis_path, "model_info", colalign=["left","right","right","right"], screen_log=True)

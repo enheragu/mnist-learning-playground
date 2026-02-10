@@ -36,7 +36,7 @@ class CNN_14L_Ablation(CNN_14L):
 metrics_log_file = os.path.join(output_path, 'CNN_14L_Ablation', f"training_metrics.yaml")
 
 # How many train loops are executed to study its variance
-total_iterations = 298
+total_iterations = 310
 
 # General configuration
 input_size = 28 * 28  # Size of each image flattened

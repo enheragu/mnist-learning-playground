@@ -17,8 +17,15 @@ if [ ! -f "$VENV_PATH" ]; then
   exit 1
 fi
 
-TMUX_CMD="source \"$VENV_PATH\" && cd \"$SCRIPT_PATH\" && python src/01_train_ablation_test.py"
+# TMUX_CMD="source \"$VENV_PATH\" && cd \"$SCRIPT_PATH\" && python src/01_train_ablation_test.py"
+TMUX_CMD="source \"$VENV_PATH\" && cd \"$SCRIPT_PATH\" && python src/06_train_overfit_test.py"
 
 tmux new-session -d -s "eeha_mnist_tests" "$TMUX_CMD"
+tmux new-session -d -s "eeha_mnist_tests_1" "$TMUX_CMD"
 tmux new-session -d -s "eeha_mnist_tests_2" "$TMUX_CMD"
 tmux new-session -d -s "eeha_mnist_tests_3" "$TMUX_CMD"
+tmux new-session -d -s "eeha_mnist_tests_4" "$TMUX_CMD"
+tmux new-session -d -s "eeha_mnist_tests_5" "$TMUX_CMD"
+
+## Kill:
+# tmux ls | awk -F: '/^eeha_mnist_tests/ {print $1}' | xargs -r -n1 tmux kill-session -t

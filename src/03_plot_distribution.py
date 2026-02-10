@@ -308,7 +308,7 @@ def plot_example_distributions(metrics_data, new_sample_size=50, analysis_path=a
     
 
 if __name__ == "__main__":
-    os.makedirs(analysis_path, exist_ok=True)
+    os.makedirs(os.path.join(analysis_path, 'single_model'), exist_ok=True)
     plt.rcParams.update({'font.size': 18})
     metrics_data = getAllModelData(output_path)
 
@@ -316,9 +316,8 @@ if __name__ == "__main__":
     log(f"Model availability: {all_models}")
     # log(f"{metrics_data = }")
     
-    plot_example_distributions(metrics_data, new_sample_size=60, analysis_path=analysis_path)
-    exit()
-
+    # plot_example_distributions(metrics_data, new_sample_size=60, analysis_path=analysis_path)
+    
     # Once all models' metrics have been gathered, plot the distributions
     if metrics_data:
         plotDataDistribution(metrics_data=metrics_data,
@@ -326,11 +325,13 @@ if __name__ == "__main__":
                                ['DNN_6L', 'HiddenLayerPerceptron'],
                                ['CNN_5L', 'CNN_3L', 'CNN_14L', 'CNN_4L'],
                                ['CNN_14L_B10', 'CNN_14L', 'CNN_14L_B25', 'CNN_14L_B50'],
+                               ['CNN_14L', 'CNN_14L_overfit_0.3', 'DNN_6L', 'DNN_6L_overfit_0.3'],
                                all_models],
                              color_list=[[c_green],
                                [c_blue,c_darkgrey],
                                [c_yellow, c_red, c_purple, c_grey],
                                [c_yellow, c_red, c_purple, c_grey],
+                               [c_blue, c_purple, c_grey, c_darkgrey],
                                color_palette_list],
                              analysis_path = analysis_path)
         # plotParamAmplitudeRelation(metrics_data)
