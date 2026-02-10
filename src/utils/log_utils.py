@@ -24,9 +24,13 @@ c_alpha_purple = "#a664974D"
 c_alpha_grey = "#7693934D"
 c_alpha_darkgrey = "#2a2b2e4D"
 
-color_palette_list = [c_blue,c_green,c_yellow,c_red,c_purple,c_grey,c_darkgrey]
+# Some corner cases need more colors... :(
+extended_color_palette = [
+    "#cd5500", "#01c201", "#1621c3", "#9a00a2", "#8c564b", "#da3c98",
+    "#7f7f7f", "#bcbd22", "#17becf"
+]
 
-
+color_palette_list = [c_blue,c_green,c_yellow,c_red,c_purple,c_grey,c_darkgrey] + extended_color_palette
 
 
 class bcolors:
@@ -45,28 +49,31 @@ def log(*args, color=bcolors.ENDC, **kwargs):
     tqdm.write(f"{color}{message}{bcolors.ENDC}", **kwargs)
 
 
-def logTable(row_data, output_path, filename, colalign = None, screen_log = True):
+def logTable(row_data, output_path = None, filename = "", colalign = None, screen_log = True):
 
     table_str = tabulate.tabulate(row_data, headers="firstrow", tablefmt="fancy_grid", colalign = colalign)
     table_latex = tabulate.tabulate(row_data, headers="firstrow", tablefmt="latex", colalign = colalign)
     
     if screen_log:
+        if filename != "":
+            log(f'{filename}', color=bcolors.OKCYAN)
         log(table_str)
 
-    file_name = os.path.join(output_path, filename.lower().replace(' ','_'))
-    log(f"Stored data table in {file_name}")
-    with open(f"{file_name}.txt", 'w') as file:
-        file.write(f'{filename}\n')
-        file.write(table_str)
+    if output_path is not None and filename != "":
+        file_name = os.path.join(output_path, filename.lower().replace(' ','_'))
+        log(f"Stored data table in {file_name}")
+        with open(f"{file_name}.txt", 'w') as file:
+            file.write(f'{filename}\n')
+            file.write(table_str)
 
-    headers = row_data[0]
-    for i in range(len(headers)):
-        table_latex = table_latex.replace(headers[i], f"\\textbf{{{headers[i]}}}")
+        headers = row_data[0]
+        for i in range(len(headers)):
+            table_latex = table_latex.replace(headers[i], f"\\textbf{{{headers[i]}}}")
 
-    caption = f"{filename}"
-    label = f"tab:{filename.lower().replace(' ','_')}"
-    table_latex_with_caption = f"\\begin{{table}}[ht]\n\\centering\n{table_latex}\n\\captionsetup{{justification=centering}}\n\\caption{{{caption}}}\n\\label{{{label}}}\n\\end{{table}}"
+        caption = f"{filename}"
+        label = f"tab:{filename.lower().replace(' ','_')}"
+        table_latex_with_caption = f"\\begin{{table}}[ht]\n\\centering\n{table_latex}\n\\captionsetup{{justification=centering}}\n\\caption{{{caption}}}\n\\label{{{label}}}\n\\end{{table}}"
 
-    with open(f"{file_name}.tex", 'w') as file:
-        file.write(table_latex_with_caption)
+        with open(f"{file_name}.tex", 'w') as file:
+            file.write(table_latex_with_caption)
 

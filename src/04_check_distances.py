@@ -5,10 +5,10 @@ import os
 import numpy as np
 from itertools import combinations
 
-from utils.log_utils import log, logTable, color_palette_list
-from plot_distribution import plotDataDistribution
-from utils import output_path
-from utils import getAllModelData
+from utils.log_utils import log, logTable, c_blue, c_green, c_yellow, c_red, c_purple, c_grey, c_darkgrey, color_palette_list
+from utils.plot_distribution import plotDataDistribution
+from utils import output_path, ablation_data_file
+from utils import getAllModelData, getAblationModelData
 
 analysis_path = './analysis_results/distances'
 
@@ -123,7 +123,6 @@ def compute_metrics(error_rates):
 
     return metrics
 
-
 if __name__ == "__main__":
 
     os.makedirs(analysis_path, exist_ok=True)
@@ -151,8 +150,29 @@ if __name__ == "__main__":
     accuracy_no_augmentation = [100-item for item in error_rates["no_data_augmentation"].values()]
     vertical_lines_acc=accuracy_agugmentation+accuracy_no_augmentation
     # print(f"Vertical lines at coord: {vertical_lines_acc}")
-    plotDataDistribution(metrics_data,
-                        [all_models],
-                        [color_palette_list],
+    plotDataDistribution(metrics_data=metrics_data,
+                         models_plot_list=[
+                             ['CNN_14L', 'CNN_14L_B10', 'CNN_14L_B50'],
+                             all_models,
+                             ['CNN_14L']],
+                         color_list=[
+                             [c_purple, c_yellow, c_grey],
+                             color_palette_list,
+                             [c_purple]],
                         vertical_lines_acc=vertical_lines_acc,
                         analysis_path=analysis_path)
+
+    
+    ablation_metrics = getAblationModelData(ablation_data_file)
+    all_models = ablation_metrics.keys()
+    
+    plotDataDistribution(metrics_data=ablation_metrics,
+                         models_plot_list=[
+                            #  ['CNN_14L_B10', 'CNN_14L', 'CNN_14L_B25', 'CNN_14L_B50'],
+                             all_models],
+                         color_list=[
+                            #  [c_yellow, c_red, c_purple, c_grey],
+                             color_palette_list],
+                        vertical_lines_acc=vertical_lines_acc,
+                        analysis_path=analysis_path)
+    
