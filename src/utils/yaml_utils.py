@@ -58,6 +58,49 @@ def updateMetricsLogFile(metrics, file_path="training_metrics.yaml"):
 
         log(f"Updated metrics file in: {file_path}")
 
+# Check if all values in the dictionary/list are of basic types
+def is_basic_types(values):
+    basic_types = (int, str, bool, float)
+    return all(isinstance(value, basic_types) for value in values)
+
+# Custom representation function for dictionaries
+def represent_dict(dumper, data):
+    if is_basic_types(data.values()):
+        return dumper.represent_mapping('tag:yaml.org,2002:map', data)
+    else:
+        return dumper.represent_mapping('tag:yaml.org,2002:map', data, flow_style=False)
+
+# Custom representation function for lists
+def represent_list(dumper, data):
+    if is_basic_types(data):
+        return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True)
+    else:
+        return dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=False)
+
+def dumpYaml(data, file_path, mode = "w+"):
+    import os, tempfile
+    # Atomic write: write to temp file first, then rename.
+    # Prevents corrupted YAML if the process is killed mid-write.
+    dir_name = os.path.dirname(file_path) or '.'
+    try:
+        with tempfile.NamedTemporaryFile(mode=mode, dir=dir_name, suffix='.tmp',
+                                          delete=False) as tmp_file:
+            # Add custom representation functions to the YAML dumper
+            yaml.add_representer(list, represent_list)
+            yaml.add_representer(dict, represent_dict)
+            yaml.dump(data, tmp_file, encoding='utf-8', width=float(5000))
+            tmp_file.flush()
+            os.fsync(tmp_file.fileno())
+            tmp_path = tmp_file.name
+        os.replace(tmp_path, file_path)  # Atomic on POSIX
+    except Exception:
+        # Clean up temp file on failure
+        try:
+            os.unlink(tmp_path)
+        except (OSError, UnboundLocalError):
+            pass
+        raise
+
 
 def getMetricsLogFile(file_path="training_metrics.yaml"):
     lock_file = f"{file_path}.lock"

@@ -2,3 +2,5 @@ venv
 data
 output_data 
 __pycache__
+.vscode
+analysis_results

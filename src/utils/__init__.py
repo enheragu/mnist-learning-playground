@@ -1,5 +1,6 @@
-from .get_model_data import getAllModelData, getAblationModelData
+from .get_model_data import getAllModelData, getAblationModelData, getAllAndAblationModelData
 from .set_seed import set_seed
+from .distribution_analysis import normalityTest, maxAmplitude, count_trials, normal_amplitude, gamma_amplitude
 
 import os
 

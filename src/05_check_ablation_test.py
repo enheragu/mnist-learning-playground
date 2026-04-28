@@ -18,7 +18,7 @@ from statsmodels.stats.anova import AnovaRM
 from statsmodels.formula.api import ols, mixedlm
 from scipy.stats import kendalltau, rankdata
 
-
+from utils.indexer import Indexer
 from utils.log_utils import log, logTable, c_blue, c_green, c_yellow, c_red, c_purple, c_grey, c_darkgrey, color_palette_list
 from utils.log_utils import log, logTable, color_palette_list, bcolors
 from utils.yaml_utils import getMetricsLogFile
@@ -53,19 +53,6 @@ def get_date_keys(d):
     """Devuelve las keys que tienen pinta de fecha."""
     return [k for k in d.keys() if date_pattern.match(k)]
 
-class Indexer:
-    def __init__(self):
-        self.data2index = {}
-        self.next_index = 0
-
-    def get_index(self, dato = None):
-        if dato not in self.data2index:
-            self.data2index[dato] = self.next_index
-            self.next_index += 1
-        elif dato is None:
-            self.data2index[dato] = self.next_index
-            self.next_index += 1
-        return self.data2index[dato]
     
 def interpret_pvalue(p):
     if p < 0.01:

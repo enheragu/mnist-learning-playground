@@ -8,7 +8,7 @@ from itertools import combinations
 from utils.log_utils import log, logTable, c_blue, c_green, c_yellow, c_red, c_purple, c_grey, c_darkgrey, color_palette_list
 from utils.plot_distribution import plotDataDistribution
 from utils import output_path, ablation_data_file
-from utils import getAllModelData, getAblationModelData
+from utils import getAllModelData, getAblationModelData, getAllAndAblationModelData
 
 analysis_path = './analysis_results/distances'
 
@@ -143,7 +143,7 @@ if __name__ == "__main__":
     logTable(log_data, analysis_path, f'Distances Analysis')
 
 
-    metrics_data = getAllModelData(output_path)
+    metrics_data, ablation_metrics = getAllAndAblationModelData(output_path, ablation_data_file)
     all_models = metrics_data.keys()
 
     accuracy_agugmentation = [100-item for item in error_rates["data_augmentated"].values()]
@@ -162,8 +162,6 @@ if __name__ == "__main__":
                         vertical_lines_acc=vertical_lines_acc,
                         analysis_path=analysis_path)
 
-    
-    ablation_metrics = getAblationModelData(ablation_data_file)
     all_models = ablation_metrics.keys()
     
     plotDataDistribution(metrics_data=ablation_metrics,

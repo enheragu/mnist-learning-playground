@@ -71,7 +71,7 @@ def generate_mermaid_diagram(model, input_size):
             grouped_layers.append(layers[i])
             i += 1     
 
-    diagram = "graph TD\n"
+    diagram = "flowchart TD\n"
     diagram += f"    title {model.model_name}\n"
     
     for layer in grouped_layers:
@@ -117,21 +117,25 @@ def model_brief(model, name=None, bytes_per_param=4, log_screen = True):
     total_params = sum(p.numel() for p in model.parameters())
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     mem_mb = total_params * bytes_per_param / 1024**2
+    layers = len(list(model.modules()))  # number of layers
     if log_screen:
-        print(f"{name:20s} | params: {total_params/1e6:7.2f}M "
-            f"| trainable: {trainable/1e6:7.2f}M "
-            f"| mem: {mem_mb:7.1f} MB")
-    return total_params, trainable, mem_mb
-if __name__ == "__main__":
+        print(f"{name:20s} "
+              f"| layers: {layers}"
+              f"| params: {total_params/1e6:7.2f}M "
+              f"| trainable: {trainable/1e6:7.2f}M "
+              f"| mem: {mem_mb:7.1f} MB "
+              )
+    return layers, total_params, trainable, mem_mb
 
+if __name__ == "__main__":
     os.makedirs(analysis_path, exist_ok=True)
-    table_data = [["Model", "Total Params (M)", "Trainable Params (M)", "Memory (MB)"]]
+    table_data = [["Model", "Layers", "Total Params (M)", "Trainable Params (M)", "Memory (MB)"]]
     for Model in [SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L, BatchNormMaxoutNetInNet]:
         model = Model(input_size=input_size, num_classes=10, output_path=output_path)
         log(f"Summary of {model.model_name} model with input size {input_size} for 10 classes classification:", color=bcolors.OKCYAN)
         # summary(model, input_size=(1, 28, 28))  # Tamaño de entrada: (canales, alto, ancho)
-        total_params, trainable_params, mem_mb = model_brief(model, False)
-        table_data.append([model.model_name, f"{total_params}", f"{trainable_params}", f"{mem_mb:7.1f}"])
+        layers, total_params, trainable_params, mem_mb = model_brief(model, False)
+        table_data.append([model.model_name, f"{layers}", f"{total_params}", f"{trainable_params}", f"{mem_mb:7.1f}"])
         diagram = generate_mermaid_diagram(model, (1, 28, 28))
 
         file_path = os.path.join(analysis_path,f"{model.model_name}_diagram.mmd")
