@@ -141,9 +141,90 @@ def plot_metric_distribution(metrics_data, train_duration_data = None, metric_la
     ax.set_title(title if title is not None else f"{metric_label} distribution")
     ax.set_xlabel(x_label if x_label is not None else metric_label)
     ax.set_ylabel(y_label if y_label is not None else ("Density" if hist_stat == "density" else "Count"))
-    ax.legend()
 
-    plt.tight_layout()
+    # Try legend placements: corners first, then below
+    legend = ax.legend(loc='upper left')
+    
+    if legend is not None:
+        fig = ax.figure
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        
+        # Get legend bounds
+        legend_bbox = legend.get_window_extent(renderer=renderer)
+        legend_labels = [label for label in ax.get_legend_handles_labels()[1] if label and not label.startswith('_')]
+        
+        # Check collision with actual plot elements (patches and lines)
+        def has_collision_with_elements():
+            plot_elements = list(ax.patches) + list(ax.lines) + list(ax.collections)
+            
+            for element in plot_elements:
+                if not element.get_visible():
+                    continue
+                try:
+                    elem_bbox = element.get_window_extent(renderer=renderer)
+                    if elem_bbox and legend_bbox.overlaps(elem_bbox):
+                        # Calculate overlap area
+                        lx0, ly0, lx1, ly1 = legend_bbox.extents
+                        ex0, ey0, ex1, ey1 = elem_bbox.extents
+                        overlap_w = max(0, min(lx1, ex1) - max(lx0, ex0))
+                        overlap_h = max(0, min(ly1, ey1) - max(ly0, ey0))
+                        overlap_area = overlap_w * overlap_h
+                        
+                        # Only consider it a collision if >1000 px² (histograms/thick lines are visible)
+                        if overlap_area > 1000:
+                            return True
+                except Exception:
+                    continue
+            
+            return False
+        
+        has_collision = has_collision_with_elements()
+        
+        # If collision, try other corners
+        if has_collision:
+            orig_handles, orig_labels = ax.get_legend_handles_labels()
+            for loc in ['upper right', 'lower left', 'lower right']:
+                legend.remove()
+                legend = ax.legend(handles=orig_handles, labels=orig_labels, loc=loc)
+                fig.canvas.draw()
+                renderer = fig.canvas.get_renderer()
+                legend_bbox = legend.get_window_extent(renderer=renderer)
+                
+                if not has_collision_with_elements():
+                    # Found a corner that fits!
+                    has_collision = False
+                    break
+        
+        # If still colliding after trying all corners, move below
+        if has_collision:
+            legend.remove()
+            legend_labels = [label for label in ax.get_legend_handles_labels()[1] if label and not label.startswith('_')]
+            n_labels = len(legend_labels)
+            ncol = 1 if n_labels <= 1 else (2 if n_labels <= 8 else 3)
+            n_rows = (n_labels + ncol - 1) // ncol
+            bottom_margin_frac = 0.08 + 0.035 * n_rows
+            bottom_margin_frac = min(bottom_margin_frac, 0.30)
+            
+            plt.tight_layout(rect=[0, bottom_margin_frac, 1, 1])
+            
+            fig.legend(
+                handles=[h for h in ax.get_legend_handles_labels()[0] if h is not None],
+                labels=legend_labels,
+                loc='lower center',
+                bbox_to_anchor=(0.5, 0.02),
+                ncol=ncol,
+                fontsize='small',
+                frameon=True,
+                fancybox=True,
+                facecolor='white',
+                framealpha=0.95,
+                edgecolor='0.3',
+            )
+        else:
+            plt.tight_layout()
+    else:
+        plt.tight_layout()
 
     if plot_filename is not None:
         path_name = os.path.join(analysis_path, f"{plot_filename}.pdf")

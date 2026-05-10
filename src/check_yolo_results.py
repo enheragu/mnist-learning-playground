@@ -12,7 +12,7 @@ import seaborn as sns
 from scipy.stats import norm, gamma, shapiro, kurtosis
 from torch import seed
 
-from utils.plot_distribution import plot_metric_distribution, plot_metric_gammadistribution, plot_survival_function
+from utils.plot_distribution import plot_metric_distribution, plot_metric_gammadistribution, plot_metric_normaldistribution, plot_survival_function
 from utils.yaml_utils import getMetricsLogFile, updateMetricsLogFile, print_yaml_structure, print_dict_keys, dumpYaml
 from utils.log_utils import log, logTable, bcolors, color_palette_list, print_dict, print_dict_keys
 
@@ -38,8 +38,8 @@ store_metric_standalone_data = False
 enable_yolos_swithced_probability = False
 enable_yolo_overfit_analysis = False
 enable_yolo_survival_function = False
-enable_yolo_plot_distributions = False
-enable_yolo_sampling_plots = True
+enable_yolo_plot_distributions = True
+enable_yolo_sampling_plots = False
 enable_yolo_ablation_tests = False
 
 # overfit-style analysis from YOLO results.csv files.
@@ -232,7 +232,7 @@ def plotYOLODistribution(data_plot, analysis_path, class_tag = 'all', metric_nam
         for key, data_items in data_plot.items():
             data[key] = data_items['validation_0']['data'][class_tag][metric_name]
 
-        plot_metric_distribution(data, train_duration_data = None, metric_label = f'{metric_name} {tag_name}',
+        plot_metric_distribution(data, train_duration_data = None, metric_label = f'{metric_name.replace("_", " ")} {tag_name.replace("_", " ")}', plot_func=plot_metric_normaldistribution,
                                 color_palette = color_palette_list, vertical_lines_acc = [], analysis_path = analysis_path,
                                 plot_filename = f'{tag_name}_{metric_name}')
         
@@ -455,8 +455,8 @@ if __name__ == "__main__":
         plotYOLODistribution(data_plot_day, distributions_path, metric_name = 'mAP50', tag_name = 'KAIST_day')
         plotYOLODistribution(data_plot_day, distributions_path, metric_name = 'mAP50-95', tag_name = 'KAIST_day')
 
-        # plotYOLODistribution({'kaist_day_rgbt': results['kaist_day_rgbt']}, analysis_path, metric_name = 'mAP50', tag_name = 'kaist_day_rgbt')
-        # plotYOLODistribution({'kaist_day_rgbt': results['kaist_day_rgbt']}, analysis_path, metric_name = 'mAP50-95', tag_name = 'kaist_day_rgbt')
+        plotYOLODistribution({'kaist_day_rgbt': results['kaist_day_rgbt']}, distributions_path, metric_name = 'mAP50', tag_name = 'kaist_day_rgbt')
+        plotYOLODistribution({'kaist_day_rgbt': results['kaist_day_rgbt']}, distributions_path, metric_name = 'mAP50-95', tag_name = 'kaist_day_rgbt')
         # plotYOLOTrainDurationDistribution({'kaist_day_rgbt': results['kaist_day_rgbt']}, analysis_path, tag_name = 'kaist_day_rgbt')
 
         # plotYOLODistribution({'kaist_day_vths_v2': results['kaist_day_vths_v2']}, analysis_path, metric_name = 'mAP50', tag_name = 'kaist_day_vths_v2')

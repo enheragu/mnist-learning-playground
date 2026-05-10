@@ -26,7 +26,7 @@ from utils.plot_distribution import plotDataDistribution
 from models.BatchSizeStudy import CNN_14L_B10, CNN_14L_B25, CNN_14L_B50, CNN_14L_B80
 from models import CNN_14L
 from utils import output_path, ablation_data_file
-from utils.compute_switched_probability import computeSwtichedProbability
+from utils.compute_switched_probability import computeSwitchedProbability
 
 
 montecarlo_samples = 20000 # Slow version :) -> 1000000
@@ -481,8 +481,13 @@ if __name__ == "__main__":
             f.write(correlations_no_diag.to_latex(float_format="%.4f".__mod__))
 
 
-        corr_matrix = correlations.copy()
-        np.fill_diagonal(corr_matrix.values, np.nan)
+        corr_matrix_values = correlations.to_numpy(copy=True)
+        np.fill_diagonal(corr_matrix_values, np.nan)
+        corr_matrix = pd.DataFrame(
+            corr_matrix_values,
+            index=correlations.index,
+            columns=correlations.columns,
+        )
         corr_matrix['batch_size'] = [c.split('_')[0] for c in corr_matrix.index]
         corr_matrix['learning_rate'] = [c.split('_')[1] for c in corr_matrix.index]
 
@@ -692,7 +697,7 @@ if __name__ == "__main__":
     accuracy_data = {}
     for model, data in metrics_data.items():
         accuracy_data[model] = [entry['accuracy']*100 for entry in metrics_data[model].values()]
-    computeSwtichedProbability(accuracy_data, ['10-0.001', '10-0.005', '10-0.01',
+    computeSwitchedProbability(accuracy_data, ['10-0.001', '10-0.005', '10-0.01',
                                                 '40-0.001', '40-0.005', '40-0.01',
                                                 '70-0.001', '70-0.005', '70-0.01'])
 
