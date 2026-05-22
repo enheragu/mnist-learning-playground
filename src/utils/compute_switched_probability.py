@@ -6,7 +6,7 @@ import numpy as np
 from utils.log_utils import log, logTable
 
 montecarlo_samples = 40000 # Slow version :) -> 1000000
-bootstrap_samples = 20000 # Slow version :) -> 100000
+bootstrap_samples = 40000 # Slow version :) -> 100000
 
 """
     Given 2 sets of data it computes the probability of, when getting one random sample

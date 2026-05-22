@@ -15,10 +15,11 @@ from utils.distribution_analysis import normalityTest, maxAmplitude, count_trial
 
 analysis_path = './analysis_results/distributions'
 
-compute_analysis_metrics = False
-plot_distributions = False
-plot_example_distributions = False
-compute_survival_function = True
+PLOT_AMPLITUDE_RELATION = False
+COMPUTE_ANALYSIS_METRICS = False
+PLOT_DISTRIBUTIONS = True
+PLOT_EXAMPLE_DISTRIBUTIONS = False
+COMPUTE_SURVIVAL_FUNCTION = False
 
 
 """
@@ -41,27 +42,119 @@ def plotParamAmplitudeRelation(metrics_data, plot_models = 'all', title_tag=''):
         if plot_models != 'all' and model_name not in plot_models:
             continue
 
-        object_class = getattr(models, model_name)
-        model = object_class(input_size=input_size, num_classes=num_classes, learning_rate=learning_rate, patience=patience, output_path=None)
-        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        # Try to get the model class
+        try:
+            object_class = getattr(models, model_name)
+            model = object_class(input_size=input_size, num_classes=num_classes, learning_rate=learning_rate, patience=patience, output_path=None)
+            trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        except AttributeError:
+            # Handle ablation model names like 'CNN_14L_B10_L0.001'
+            # Extract base model name and parameters
+            if 'CNN_14L' in model_name and '_B' in model_name and '_L' in model_name:
+                try:
+                    # Parse format: CNN_14L_B{batch_size}_L{learning_rate}
+                    parts = model_name.split('_')
+                    base_model_name = 'CNN_14L'
+                    # Find B and L values
+                    batch_size_str = [p for p in parts if p.startswith('B')][0][1:]  # Remove 'B' prefix
+                    learning_rate_val = float([p for p in parts if p.startswith('L')][0][1:])  # Remove 'L' prefix
+                    
+                    object_class = getattr(models, base_model_name)
+                    model = object_class(input_size=input_size, num_classes=num_classes, learning_rate=learning_rate_val, patience=patience, output_path=None)
+                    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+                except Exception as e:
+                    log(f"Could not parse ablation model {model_name}: {e}", c_red)
+                    continue
+            else:
+                log(f"Could not find model class for {model_name}", c_red)
+                continue
+        
         accuracy_data = [entry['accuracy']*100 for entry in data.values()]
         amplitude = np.max(accuracy_data) - np.min(accuracy_data)
         x.append(trainable_params)
         y.append(amplitude)
         labels.append(model_name)
 
-    plt.figure(figsize=(10, 6))
-    plt.scatter(x, y)
+    plt.figure(figsize=(12, 8))
+    plt.scatter(x, y, zorder=3)
 
+    # Posicionar etiquetas dinámicamente para evitar solapamientos en X e Y
+    x_range = np.max(x) - np.min(x)
+    x_middle = x_range / 2 + np.min(x)
+    y_range = np.max(y) - np.min(y)
+    proximity_threshold = y_range * 0.02  # Umbral: 2% del rango Y
+    
+    # Crear índices ordenados por Y para detectar puntos cercanos
+    y_indices = np.argsort(y)
+    
+    # Determinar lado para cada punto considerando proximidad a otros
+    sides = {}  # Mapeo de índice a 'left' o 'right'
+    for i in range(len(labels)):
+        idx = y_indices[i]
+        
+        # Determinar lado inicial basado en X
+        if x[idx] < x_middle:
+            initial_side = 'left'
+        else:
+            initial_side = 'right'
+        
+        # Verificar si hay puntos muy cercanos en Y
+        nearby_indices = [j for j in range(len(labels)) if abs(y[j] - y[idx]) < proximity_threshold and j != idx]
+        
+        if nearby_indices:
+            # Si hay puntos cercanos, alternar lado para uno de ellos
+            nearby_sides = [sides.get(j, 'unknown') for j in nearby_indices if j in sides]
+            if 'left' in nearby_sides:
+                # Si alguno va a izquierda, este va a derecha
+                sides[idx] = 'right'
+            elif 'right' in nearby_sides:
+                # Si alguno va a derecha, este va a izquierda
+                sides[idx] = 'left'
+            else:
+                # Ambos nuevos: asignar al lado opuesto del primero
+                sides[idx] = 'right' if initial_side == 'left' else 'left'
+        else:
+            sides[idx] = initial_side
+    
+    # Dibujar etiquetas con los lados determinados
+    # Usar offsets en puntos (independientes de la escala de datos) con annotate
+    ax = plt.gca()
     for i, label in enumerate(labels):
-        plt.text(x[i], y[i], label, fontsize=9, ha='right')
+        ha = sides[i]
+        # Detectar si es nombre de ablation (tiene _B y _L)
+        is_ablation = ('_B' in label and '_L' in label)
 
-    plt.title('Accuracy amplitude vs Trainable Params')
+        # Offset en puntos (px). Cortos cerca, ablation más lejos.
+        base_dx = 10 if is_ablation else 7
+        dx = base_dx if ha == 'left' else -base_dx
+
+        # Si hay puntos muy cercanos en Y, desplazar también en Y en puntos para evitar solapamiento
+        # Contar cuántos puntos están cerca en Y por encima del umbral
+        nearby_count = sum(1 for j in range(len(labels)) if j != i and abs(y[j] - y[i]) < proximity_threshold)
+        # Alternar desplazamiento vertical según índice para separar visualmente
+        if nearby_count > 0:
+            # small vertical offset per nearby point
+            dy = (i % 2) * 6  # 0 or 6 points
+        else:
+            dy = 0
+
+        ax.annotate(
+            label,
+            xy=(x[i], y[i]),
+            xytext=(dx, dy),
+            textcoords='offset points',
+            fontsize=9,
+            ha=ha,
+            va='center',
+            zorder=4,
+        )
+
+    plt.title(r'Accuracy amplitude $\mathit{vs}.$ Trainable Params')
     plt.ylabel('Accuracy amplitude')
     plt.xlabel('Trainable params (N)')
 
-    # Mostrar la gráfica
-    plt.grid(True)
+    # Mostrar la gráfica con grid atrás
+    plt.grid(True, zorder=0)
     plt.savefig(os.path.join(analysis_path,f"amplitude_relation_{title_tag}.pdf"), format="pdf")
 
     if only_store:
@@ -193,12 +286,21 @@ if __name__ == "__main__":
     # log(f"{metrics_data = }")
     
     if ablation_metrics:
-        if plot_distributions:
+        if PLOT_AMPLITUDE_RELATION:
+            plotParamAmplitudeRelation(ablation_metrics, plot_models=ablatipon_models, title_tag='ablation')
+       
+        if PLOT_DISTRIBUTIONS:
             plotDataDistribution(metrics_data=ablation_metrics,
                                 models_plot_list=[ablatipon_models],
                                 color_list=[color_palette_list],
                                 analysis_path=analysis_path)
-        if compute_analysis_metrics:
+            plotDataDistribution(metrics_data=ablation_metrics,
+                                models_plot_list=[ablatipon_models],
+                                color_list=[color_palette_list],
+                                analysis_path=analysis_path,
+                                show_histogram=False,
+                                plot_filename='plot_accuracy_ablation')
+        if COMPUTE_ANALYSIS_METRICS:
             normalityTest(metrics_data=ablation_metrics, title_tag='ablation', analysis_path=analysis_path)
             maxAmplitude(metrics_data=ablation_metrics, title_tag='ablation', analysis_path=analysis_path)
             maxAmplitude(metrics_data=ablation_metrics, metric='train_duration', unit=' (s)', unit_multiplier=1, format='.1f', amplitude_function=gamma_amplitude, title_tag='ablation', analysis_path=analysis_path)
@@ -224,9 +326,11 @@ if __name__ == "__main__":
             # 'DNN_6L_overfit_0.02',
             'HiddenLayerPerceptron',
             'SimplePerceptron']
-        if plot_distributions:
+        
+        if PLOT_AMPLITUDE_RELATION:
             plotParamAmplitudeRelation(metrics_data, plot_models=all_models_no_overfit)
         
+        if PLOT_DISTRIBUTIONS:
             plotDataDistribution(metrics_data=metrics_data,
                                 models_plot_list=[['SimplePerceptron'],
                                 ['CNN_14L'],
@@ -250,7 +354,7 @@ if __name__ == "__main__":
                                 ],
                                 analysis_path = analysis_path)
         
-        if compute_analysis_metrics:
+        if COMPUTE_ANALYSIS_METRICS:
             normalityTest(metrics_data=metrics_data, analysis_path=analysis_path)
             maxAmplitude(metrics_data=metrics_data, analysis_path=analysis_path)
             
@@ -260,7 +364,7 @@ if __name__ == "__main__":
             count_trials(metrics_data=metrics_data, analysis_path=analysis_path)
 
 
-        if plot_example_distributions:
+        if PLOT_EXAMPLE_DISTRIBUTIONS:
             plot_example_distributions(metrics_data=metrics_data, new_sample_size=60, analysis_path=analysis_path)
 
         print(f"Search Juyang (John) Weng for info about initialization bias and similar stuff https://www.google.com/search?client=ubuntu&channel=fs&q=Juyang+%28John%29+Weng")
@@ -270,7 +374,7 @@ if __name__ == "__main__":
     combined_models = ablation_metrics.copy()
     combined_models.update(metrics_data)
 
-    if compute_survival_function:
+    if COMPUTE_SURVIVAL_FUNCTION:
         exceedance_metric_data = {
             model_name: [entry['accuracy'] * 100 for entry in model_data.values()]
             for model_name, model_data in combined_models.items()
@@ -283,6 +387,7 @@ if __name__ == "__main__":
                 metric_label='Accuracy (%)',
                 table_filename='Survival Function Key Percentiles Combined Models',
                 plot_prefix='survival_combined',
+                legend_ncol=2,
             )
             log("Survival function plot generated", c_green)
         else:

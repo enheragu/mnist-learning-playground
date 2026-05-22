@@ -37,9 +37,9 @@ parse_mode = "incremental"
 store_metric_standalone_data = False
 enable_yolos_swithced_probability = False
 enable_yolo_overfit_analysis = False
-enable_yolo_survival_function = False
-enable_yolo_plot_distributions = True
-enable_yolo_sampling_plots = False
+enable_yolo_survival_function = True
+enable_yolo_plot_distributions = False
+enable_yolo_sampling_plots = True
 enable_yolo_ablation_tests = False
 
 # overfit-style analysis from YOLO results.csv files.
@@ -477,8 +477,8 @@ if __name__ == "__main__":
             plotYOLOTrainDurationDistribution({'LLVIP_Ch4v3': results['LLVIP_Ch4v3']}, distributions_path, tag_name = 'LLVIP_Ch4v3')
 
     if enable_yolo_sampling_plots:
-        plot_sampling_from_yolo(results, analysis_path=sampling_path, metric='mAP50', percentile=95)
-        plot_sampling_from_yolo(results, analysis_path=sampling_path, metric='mAP50-95', percentile=95)
+        plot_sampling_from_yolo(results, analysis_path=sampling_path, metric='mAP50', percentile=90)
+        plot_sampling_from_yolo(results, analysis_path=sampling_path, metric='mAP50-95', percentile=90)
 
 
     if enable_yolo_ablation_tests:

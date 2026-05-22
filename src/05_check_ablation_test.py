@@ -33,9 +33,9 @@ montecarlo_samples = 20000 # Slow version :) -> 1000000
 bootstrap_samples = 20000 # Slow version :) -> 100000
 
 
-anova_table_analysis = True
+anova_table_analysis = False
 mixedlm_analysis = False
-percentile_analysis = True
+percentile_analysis = False
 kendall_w_analysis = False
 plot_interaction = True
 add_extra_data = False # Inculdes data from batch size study
@@ -76,18 +76,27 @@ def generate_interaction_plot(df, x_var, y_var, hue_var, title, **kwargs):
         title (str): Title of the plot.
     """
 
-    plt.figure(figsize=(20, 12))
+    plt.figure(figsize=(18, 10))
     num_hue = df[hue_var].nunique()
+    
+    # Add individual points in a single wide column with jitter
+    sns.stripplot(data=df, x=x_var, y=y_var, hue=hue_var,
+                  alpha=0.35, size=10, palette=color_palette_list[:num_hue],
+                  jitter=0.3, legend=False)
+    
+    # Add mean line and summary points separated by hue (on top)
     sns.pointplot(data=df, x=x_var, y=y_var, hue=hue_var, palette=color_palette_list[:num_hue],    
         markers='o',        # Asegura que se usen círculos como puntos
         linestyles='-',     # Línea sólida
+        linewidth=6,       # Grosor de la línea
+        zorder=10,          # Ensure it appears on top
         **kwargs
     )
     plt.title(title)
     plt.xlabel(x_var.replace('_','').title())
     plt.ylabel(y_var.replace('_','').title())
     plt.legend(title=hue_var)
-    plt.tight_layout()
+    plt.subplots_adjust(right=0.95)
     # plt.show()
     
     plt.savefig(os.path.join(analysis_path, f'interaction_plot_{x_var}_{y_var}_{hue_var}.pdf'), format="pdf")
@@ -103,7 +112,7 @@ def plotScaterplot(pivot_df, output_path='.', filename='scatterplot_conditions')
         data = pivot_df[[cond1, cond2]].dropna()
         plt.figure(figsize=(10, 10))
         sns.scatterplot(x=cond1, y=cond2, data=data)
-        plt.title(f'Accuracy: {cond1} vs {cond2}')
+        plt.title(f'Accuracy: {cond1} $\\mathit{{vs}}.$ {cond2}')
         plt.xlabel(cond1)
         plt.ylabel(cond2)
         plot_filename = f'{filename}_{cond1}_vs_{cond2}.pdf'
@@ -645,19 +654,20 @@ if __name__ == "__main__":
     ##  Interaction plots  ##
     #########################
     if plot_interaction:
-        generate_interaction_plot(df, 'batch_size', 'accuracy', 'learning_rate', 'Interation Plot: Batch Size vs Accuracy by Learning Rate')
+        generate_interaction_plot(df, 'batch_size', 'accuracy', 'learning_rate', r'Interaction Plot: Batch Size $\mathit{vs}.$ Accuracy by Learning Rate')
+        generate_interaction_plot(df, 'learning_rate', 'accuracy', 'batch_size', r'Interaction Plot: Learning Rate $\mathit{vs}.$ Accuracy by Batch Size')
         
         # Order indexes based on accuracy for a given learning rate level
         df['index'] = df['index'].astype('category')
         subset = df[df['batch_size'] == 10]
         ordered_categories = subset.groupby('index', observed=False)['accuracy'].mean().sort_values().index.tolist()
-        generate_interaction_plot(df, 'index', 'accuracy', 'batch_size', 'Interation Plot: Index vs Accuracy by Batch Size', order=ordered_categories)
+        generate_interaction_plot(df, 'index', 'accuracy', 'batch_size', r'Interaction Plot: Index $\mathit{vs}.$ Accuracy by Batch Size', order=ordered_categories)
         
         # Order indexes based on accuracy for a given learning rate level
         df['index'] = df['index'].astype('category')
         subset = df[df['learning_rate'] == 0.01]
         ordered_categories = subset.groupby('index', observed=False)['accuracy'].mean().sort_values().index.tolist()
-        generate_interaction_plot(df, 'index', 'accuracy', 'learning_rate', 'Interation Plot: Index vs Accuracy by Learning Rate', order=ordered_categories)
+        generate_interaction_plot(df, 'index', 'accuracy', 'learning_rate', r'Interaction Plot: Index $\mathit{vs}.$ Accuracy by Learning Rate', order=ordered_categories)
 
 
     # Plot distributions to check error probability
@@ -699,7 +709,7 @@ if __name__ == "__main__":
         accuracy_data[model] = [entry['accuracy']*100 for entry in metrics_data[model].values()]
     computeSwitchedProbability(accuracy_data, ['10-0.001', '10-0.005', '10-0.01',
                                                 '40-0.001', '40-0.005', '40-0.01',
-                                                '70-0.001', '70-0.005', '70-0.01'])
+                                                '70-0.001', '70-0.005', '70-0.01'], analysis_path)
 
 
     computeAblationDecisionErrorProbability(df)

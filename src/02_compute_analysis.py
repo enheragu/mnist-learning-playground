@@ -21,11 +21,11 @@ from utils.plot_sampling_graph import plot_all_sampling_errors, plot_all_percent
 analysis_path = './analysis_results/analysis'
 
 store_accuracy_standalonde_data = False
-compute_estimation_error = False
-compute_better_result_sample_size = False
-compute_switched_probability = False
-compute_sampling_error_graphs = True
-compute_percentile_probability_graphs = True
+enable_compute_estimation_error = False
+enable_compute_better_result_sample_size = True
+enable_compute_switched_probability = False
+enable_compute_sampling_error_graphs = False
+enable_compute_percentile_probability_graphs = False
 simulation_x_max_quantile = 99.5
 
 estimation_error_repetitions = 100
@@ -119,7 +119,7 @@ def computeBootstrapBetterResultSampleSize(data, percentile = 96, percentile_val
     Wrap function to compute train iterations to get a result better than the percentile of provided data
     both using approximated normal distribution and bootstrap approach
 """
-def computeBetterResultSampleSize(dict_data, g_names, percentile = 95, accuracy_value = None, x_max_quantile=None):
+def computeBetterResultSampleSize(dict_data, g_names, percentile = 90, accuracy_value = None, x_max_quantile=None):
     for name in g_names:
         if accuracy_value is not None:
             percentile_value = accuracy_value
@@ -198,7 +198,6 @@ def computeBetterResultSampleSizeMultiPercentiles(dict_data, g_names, percentile
                                  x_max_quantile=x_max_quantile)
 
 
-
 """
     Templated version (for both bootstrap and MonteCarlo) to compute the estimation error of each
     method when estimating basic statistics (mean and std) of the provided data
@@ -250,8 +249,8 @@ def computeEstimationError(dict_data, g_names, bootstrap_simulations=default_boo
         g_mean = np.mean(data)
         g_std = np.std(data)
 
-        bootstrap_sample_sizes = np.array([1000, 4000, 8000, 16000, 25000, 50000, 75000, 100000, 150000]).astype(int)
-        monte_carlo_sample_sizes = np.array([1000, 4000, 8000, 16000, 50000, 100000, 200000, 400000, 600000]).astype(int)
+        bootstrap_sample_sizes = np.array([100, 400, 800, 1600, 5000, 10000, 20000, 40000, 60000, 100000]).astype(int)
+        monte_carlo_sample_sizes = np.array([100, 400, 800, 1600, 5000, 10000, 20000, 40000, 60000, 100000]).astype(int)
 
         log(f"MonteCarlo Estimation Error for {name} (mean: {g_mean:.4f}, std: {g_std:.4f}):", color=bcolors.OKCYAN)
         montecarlo_sampling = lambda sample_size: np.random.normal(loc=g_mean, scale=g_std, size=sample_size)
@@ -313,31 +312,31 @@ if __name__ == "__main__":
         dumpYaml(ablation_accuracy_data, f"{analysis_path}/ablation_accuracy_data_raw.yaml")
 
 
-    if not compute_estimation_error:
+    if not enable_compute_estimation_error:
         log("Skipping estimation error computation...", bcolors.WARNING)
-    if not compute_better_result_sample_size:
+    if not enable_compute_better_result_sample_size:
         log("Skipping better result sample size computation...", bcolors.WARNING)
-    if not compute_switched_probability:
+    if not enable_compute_switched_probability:
         log("Skipping switched probability computation...", bcolors.WARNING) 
-    if not compute_sampling_error_graphs:
+    if not enable_compute_sampling_error_graphs:
         log("Skipping sampling error graphs computation...", bcolors.WARNING)
-    if not compute_percentile_probability_graphs:
+    if not enable_compute_percentile_probability_graphs:
         log("Skipping percentile probability graphs computation...", bcolors.WARNING)
 
-    if compute_estimation_error:
+    if enable_compute_estimation_error:
         computeEstimationError(dict_data=accuracy_data, 
                                g_names=['CNN_3L', 'CNN_4L', 'CNN_5L','CNN_14L'], 
                                bootstrap_simulations=default_bootstrap_simulations*2, 
                                montecarlo_simulations=default_montecarlo_simulations*2,
                                n_repetitions=estimation_error_repetitions)
 
-    if compute_better_result_sample_size:
+    if enable_compute_better_result_sample_size:
         # computeBetterResultSampleSize(accuracy_data, ['SimplePerceptron'])
         # computeBetterResultSampleSize(accuracy_data, ['CNN_14L'], percentile=92)
-        # computeBetterResultSampleSize(accuracy_data, ['CNN_14L'], percentile=90)
+        computeBetterResultSampleSize(accuracy_data, ['CNN_14L'], percentile=90)
         computeBetterResultSampleSizeMultiPercentiles(accuracy_data, ['CNN_14L'], percentiles=(90, 95), x_max_quantile=simulation_x_max_quantile)
 
-    if compute_switched_probability:
+    if enable_compute_switched_probability:
         computeSwitchedProbability(accuracy_data, ['HiddenLayerPerceptron','DNN_6L'], analysis_path=analysis_path)
         computeSwitchedProbability(accuracy_data, ['CNN_3L', 'CNN_4L', 'CNN_5L','CNN_14L'], analysis_path=analysis_path)
 
@@ -345,7 +344,7 @@ if __name__ == "__main__":
     combined_models = ablation_metrics.copy()
     combined_models.update(metrics_data)
     combined_models_list = all_models + list(ablation_metrics.keys())
-    if compute_sampling_error_graphs:
+    if enable_compute_sampling_error_graphs:
         if ablation_metrics is not None:
             # plot_all_sampling_errors(metrics_data=ablation_metrics, analysis_path=analysis_path, title_tag='ablation')
             plot_all_sampling_errors(metrics_data=combined_models, analysis_path=analysis_path, plot_models=combined_models_list)
@@ -353,7 +352,7 @@ if __name__ == "__main__":
         # plot_all_sampling_errors(metrics_data=metrics_data, analysis_path=analysis_path, title_tag='informed_training', plot_models=['SimplePerceptron','CNN_3L', 'CNN_4L', 'CNN_5L', 'CNN_14L'], color_list=[c_green, c_yellow, c_grey, c_red, c_purple])
         # plot_all_sampling_errors(metrics_data=metrics_data, analysis_path=analysis_path, title_tag='CNN_14L_variations', plot_models=['CNN_14L_B10', 'CNN_14L', 'CNN_14L_B25', 'CNN_14L_B50'])
 
-    if compute_percentile_probability_graphs:
+    if enable_compute_percentile_probability_graphs:
         probability_percentile = 90
         probability_percentile_range = [80,100]
         if ablation_metrics is not None:

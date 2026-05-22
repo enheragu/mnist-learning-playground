@@ -16,9 +16,9 @@ from utils.log_utils import log, logTable, bcolors, c_blue, c_green, c_yellow, c
 # Whether to plot or just store images in disk
 only_store = True
 plt.rcParams.update({'font.size': 24,
-                     'legend.fontsize': 21})
+                     'legend.fontsize': 15})
 
-def plot_metric_normaldistribution(data_y, ax, color, mean=None, std=None):
+def plot_metric_normaldistribution(data_y, ax, color, mean=None, std=None, linestyle='--'):
     # Ajuste de la distribución normal para el modelo
     mean = np.mean(data_y) if mean is None else mean
     std = np.std(data_y) if std is None else std
@@ -27,13 +27,13 @@ def plot_metric_normaldistribution(data_y, ax, color, mean=None, std=None):
         x_left = min(mean - std * 4, min(data_y))
         x = np.linspace(x_left, x_right, 100)
         y = norm.pdf(x, mean, std)
-        sns.lineplot(x=x, y=y, linestyle='--', linewidth=2, color=color, ax=ax)
+        sns.lineplot(x=x, y=y, linestyle=linestyle, linewidth=2, color=color, ax=ax)
         for pos in np.arange(mean - std * 3, mean + std * 3, std):
             linewidth = 1 if abs(pos-mean) >= 0.01 else 2
             linestyle = ':' if abs(pos-mean) >= 0.01 else 'solid'
             ax.vlines(x=pos, ymin=0, ymax=norm.pdf(pos, mean, std), colors=color, linewidth=linewidth, linestyles=linestyle)
 
-def plot_metric_gammadistribution(data_y, ax, color, mean=None, std=None):
+def plot_metric_gammadistribution(data_y, ax, color, mean=None, std=None, linestyle='--'):
 
     if np.any(np.array(data_y) <= 0):
         log(f"⚠️  Invalid data for Gamma distribution: {np.sum(np.array(data_y) <= 0)} values <= 0", color=bcolors.WARNING)
@@ -41,7 +41,7 @@ def plot_metric_gammadistribution(data_y, ax, color, mean=None, std=None):
     if np.std(np.array(data_y)) == 0:
         log("⚠️  Zero variance data for Gamma distribution. Cannot compute.", color=bcolors.WARNING)
         return
-    
+
     # Ajuste de la distribución gamma para el modelo
     data_y = np.array(data_y)
     data_corrected = copy.deepcopy(data_y)
@@ -53,7 +53,7 @@ def plot_metric_gammadistribution(data_y, ax, color, mean=None, std=None):
     x = np.linspace(0, x_right, 100)
     y = gamma.pdf(x, shape, loc, scale)
 
-    sns.lineplot(x=x, y=y, linestyle='--', linewidth=2, color=color, ax=ax)
+    sns.lineplot(x=x, y=y, linestyle=linestyle, linewidth=2, color=color, ax=ax)
 
     for pos in [0.05,0.25,0.5,0.750,0.95]:
         pos_percentile = gamma.ppf(pos, shape, loc, scale)
@@ -65,7 +65,7 @@ def plot_metric_gammadistribution(data_y, ax, color, mean=None, std=None):
 """
     Plots theoretical normal distribution based on given data, and plots binned distribution or real data
 """
-def plot_metric_distribution(metrics_data, train_duration_data = None, metric_label = 'accuracy (%)', plot_func = plot_metric_normaldistribution, 
+def plot_metric_distribution(metrics_data, train_duration_data = None, metric_label = 'accuracy (%)', plot_func = plot_metric_normaldistribution,
                              color_palette = color_palette_list, vertical_lines_acc = None, analysis_path = None,
                              plot_filename = None, plot_mean = None, plot_std = None,
                              bin_size = 20,
@@ -74,7 +74,8 @@ def plot_metric_distribution(metrics_data, train_duration_data = None, metric_la
                              y_label = None,
                              hist_stat = "density",
                              x_max_quantile = None,
-                             hist_kwargs = None):
+                             hist_kwargs = None,
+                             show_histogram = True):
     
     if analysis_path is None:
         log(f"[Error] [plot_metric_distribution] no analysis_path was provided for {metric_label}")
@@ -95,24 +96,31 @@ def plot_metric_distribution(metrics_data, train_duration_data = None, metric_la
         # train_duration_str = f"{int(train_duration // 60)}min {train_duration % 60:.2f}s"
         color = color_palette[index]
 
-        # Specific case for constant plot 
+        # Specific case for constant plot
         if np.ptp(data_y) == 0:
             x0 = data_y[0]
-            ax.axvline(x0, color=color, linewidth=4, alpha=0.7, 
-                    label=f"{model_name} (n={len(data_y)}), X = {x0:.4f}") #; mean={np.mean(data_y):.2f}; std={np.std(data_y):.2f})") #   (mean train: {train_duration_str})")
+            ax.axvline(x0, color=color, linewidth=4, alpha=0.7,
+                    label=f"{model_name} (n={len(data_y)}), X = {x0:.4f}")
             max_density = max(max_density, 100)
-        else:
-            hist = sns.histplot(data_y, bins=bin_size, stat=hist_stat, alpha=0.4, label=f"{model_name}   (n={len(data_y)})", #; mean={np.mean(data_y):.2f}; std={np.std(data_y):.2f})", #   (mean train: {train_duration_str})",
+        elif show_histogram:
+            hist = sns.histplot(data_y, bins=bin_size, stat=hist_stat, alpha=0.4, label=f"{model_name}   (n={len(data_y)})",
                         color=color, edgecolor='none', ax=ax, **hist_kwargs)
-        
             patch_heights = [patch.get_height() for patch in hist.patches]
             max_density = max(max_density, max(patch_heights))
+        else:
+            ax.plot([], [], color=color, label=f"{model_name}   (n={len(data_y)})")
+            mean_v = np.mean(data_y) if plot_mean is None else plot_mean
+            std_v = np.std(data_y) if plot_std is None else plot_std
+            if std_v > 1e-6:
+                from scipy.stats import norm as _norm
+                max_density = max(max_density, _norm.pdf(mean_v, mean_v, std_v))
         
         x_range[0] = min(x_range[0], min(data_y))
         x_range[1] = max(x_range[1], max(data_y))
         all_x_values.extend(np.asarray(data_y, dtype=float).tolist())
         if plot_func is not None:
-            plot_func(data_y, ax, color, plot_mean, plot_std)
+            curve_linestyle = '--' if show_histogram else '-'
+            plot_func(data_y, ax, color, plot_mean, plot_std, linestyle=curve_linestyle)
 
     if metric_label == "Accuracy (%)":
         if vertical_lines_acc:
@@ -214,7 +222,7 @@ def plot_metric_distribution(metrics_data, train_duration_data = None, metric_la
                 loc='lower center',
                 bbox_to_anchor=(0.5, 0.02),
                 ncol=ncol,
-                fontsize='small',
+                # fontsize='small',
                 frameon=True,
                 fancybox=True,
                 facecolor='white',
@@ -226,10 +234,11 @@ def plot_metric_distribution(metrics_data, train_duration_data = None, metric_la
     else:
         plt.tight_layout()
 
+    nohistogram_suffix = '' if show_histogram else '_nohistogram'
     if plot_filename is not None:
-        path_name = os.path.join(analysis_path, f"{plot_filename}.pdf")
+        path_name = os.path.join(analysis_path, f"{plot_filename}{nohistogram_suffix}.pdf")
     else:
-        path_name = os.path.join(analysis_path,f"plot_{metric_label.replace(' (%)','').replace(' (s)','').replace(' ','_').lower()}_{'_'.join(list(metrics_data.keys()))}.pdf")
+        path_name = os.path.join(analysis_path,f"plot_{metric_label.replace(' (%)','').replace(' (s)','').replace(' ','_').lower()}_{'_'.join(list(metrics_data.keys()))}{nohistogram_suffix}.pdf")
     plt.savefig(path_name, format="pdf")
     # print(f"\t· Stored file in {path_name}")
 
@@ -239,8 +248,9 @@ def plot_metric_distribution(metrics_data, train_duration_data = None, metric_la
 """
     Intermediate function to handle each distribution plot wanted
 """
-def plotDataDistribution(metrics_data, models_plot_list = [[]], color_list = color_palette_list, 
-                         vertical_lines_acc = [], analysis_path=None, single_plots = True):
+def plotDataDistribution(metrics_data, models_plot_list = [[]], color_list = color_palette_list,
+                         vertical_lines_acc = [], analysis_path=None, single_plots = True,
+                         show_histogram = True, plot_filename = None):
     
     if analysis_path is None:
         log(f"[Error] [plotDataDistribution] no analysis_path was provided for plots {models_plot_list = }")
@@ -269,13 +279,13 @@ def plotDataDistribution(metrics_data, models_plot_list = [[]], color_list = col
             
             if plot_best_epoch:
                 best_epoch_data = {model: [entry['best_epoch'] for entry in metrics_data[model].values()]}
-                plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch', plot_func=plot_metric_gammadistribution, color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=os.path.join(analysis_path,'single_model'))
-            
+                plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch', plot_func=plot_metric_gammadistribution, color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=os.path.join(analysis_path,'single_model'), show_histogram=show_histogram)
+
             if plot_train_duration:
                 train_duration_data = {model: [entry['train_duration'] for entry in metrics_data[model].values()]}
-                plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)', plot_func=plot_metric_gammadistribution, color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=os.path.join(analysis_path,'single_model'))        
-        
-        plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'Accuracy (%)', color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=os.path.join(analysis_path,'single_model'))
+                plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)', plot_func=plot_metric_gammadistribution, color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=os.path.join(analysis_path,'single_model'), show_histogram=show_histogram)
+
+        plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'Accuracy (%)', color_palette=color, vertical_lines_acc=vertical_lines_acc, analysis_path=os.path.join(analysis_path,'single_model'), show_histogram=show_histogram)
 
     for plot, color_scheme in zip(models_plot_list, color_list):
         print(f"Generating plot for {plot} model{'s' if len(plot)>1 else ''}")
@@ -295,12 +305,12 @@ def plotDataDistribution(metrics_data, models_plot_list = [[]], color_list = col
             else:
                 print(f"\t· [WARNING] {model} not in metrics available: {metrics_data.keys()}")
 
-        if plot_train_duration: 
-            plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)', plot_func=plot_metric_gammadistribution, color_palette=color_scheme, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
-        if plot_best_epoch: 
-            plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch', plot_func=plot_metric_gammadistribution, color_palette=color_scheme, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
-        
-        plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'Accuracy (%)', color_palette=color_scheme, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path)
+        if plot_train_duration:
+            plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)', plot_func=plot_metric_gammadistribution, color_palette=color_scheme, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path, show_histogram=show_histogram)
+        if plot_best_epoch:
+            plot_metric_distribution(best_epoch_data, train_duration_data, metric_label = 'Best Epoch', plot_func=plot_metric_gammadistribution, color_palette=color_scheme, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path, show_histogram=show_histogram)
+
+        plot_metric_distribution(accuracy_data, train_duration_data, metric_label = 'Accuracy (%)', color_palette=color_scheme, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path, show_histogram=show_histogram, plot_filename=plot_filename)
         
     # plt.show()
 
@@ -311,7 +321,8 @@ def plot_survival_function(metrics_data,
                            percentile_start=89,
                            percentile_step=0.1,
                            table_filename=None,
-                           plot_prefix='survival'):
+                           plot_prefix='survival',
+                           legend_ncol=2):
     """Empirical percentile exceedance calibration — one line per model.
 
     metric-agnostic: pass any pre-extracted list of floats per model, e.g.
@@ -332,7 +343,7 @@ def plot_survival_function(metrics_data,
     key_ps = [50, 75, 90, 95, 97.5, 99]
     table_data = [['Model', 'N'] + [f'p{p:g}: empirical % > threshold (theoretical {100-p:g}%)' for p in key_ps]]
 
-    fig, ax = plt.subplots(figsize=(12, 7))
+    fig, ax = plt.subplots(figsize=(12, 9))
 
     # Theoretical reference: P(X > x_p) = (100-P)% by definition of normal percentiles
     ax.plot(percentiles, 100 - percentiles, color='black', linestyle='--',
@@ -369,9 +380,33 @@ def plot_survival_function(metrics_data,
     ax.autoscale(axis='y')
     ax.set_ylim(bottom=0)
     ax.set_title(f"{metric_label}: P(X ≥ x_p)")
-    ax.legend(loc='upper right', fontsize=8)
+    legend_handles, legend_labels = ax.get_legend_handles_labels()
+    bottom_margin_frac = 0.07
+    if legend_labels:
+        ncol = max(1, int(legend_ncol))
+        legend = fig.legend(
+            handles=legend_handles,
+            labels=legend_labels,
+            loc='lower left',
+            bbox_to_anchor=(0.03, 0.015, 0.94, 0.0),
+            mode='expand',
+            ncol=ncol,
+            # fontsize=12,
+            frameon=True,
+            fancybox=True,
+            facecolor='white',
+            framealpha=0.95,
+            edgecolor='0.3',
+        )
+
+        # Reserve exactly the space the rendered legend occupies (+small padding).
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        legend_bbox_fig = legend.get_window_extent(renderer=renderer).transformed(fig.transFigure.inverted())
+        required_bottom_margin = max(legend_bbox_fig.y1 + 0.006, 0.06)
+        bottom_margin_frac = min(required_bottom_margin, 0.80)
     ax.grid(True, alpha=0.3)
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, bottom_margin_frac, 1, 1])
 
     output_plot = os.path.join(analysis_path, f"{plot_prefix}.pdf")
     plt.savefig(output_plot, format='pdf')
