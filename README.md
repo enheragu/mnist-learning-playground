@@ -8,6 +8,16 @@ This work makes use of the research presented in:
 
 > Heredia-Aguado, E.; Cabrera, J.J.; Jiménez, L.M.; Valiente, D.; Gil, A. *Static Early Fusion Techniques for Visible and Thermal Images to Enhance Convolutional Neural Network Detection: A Performance Analysis*. **Remote Sens.** 2025, 17(6), 1060. [https://doi.org/10.3390/rs17061060](https://doi.org/10.3390/rs17061060)
 
+
+Companion interactive browser for the per-trial metrics, distribution
+plots, sampling curves and cross-model misranking tables produced by
+this repository:
+
+> Heredia-Aguado, E., Rujano, A., Valiente, D., & Gil, A. (2026).
+> *MLV Tools: Interactive Web Applications for Machine Learning Variance
+> Analysis*. Zenodo. [https://doi.org/10.5281/zenodo.20268237](https://doi.org/10.5281/zenodo.20268237)
+> — live at [enheragu.github.io/mlv-tools](https://enheragu.github.io/mlv-tools).
+
 ---
 
 ## Table of Contents
