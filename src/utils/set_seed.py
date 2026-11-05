@@ -7,12 +7,12 @@ import numpy as np
 import torch
 
 def set_seed(seed=42):
-    """Establece la semilla para todas las librerías relevantes."""
-    random.seed(seed)  # Para el módulo random de Python
-    np.random.seed(seed)  # Para NumPy
-    torch.manual_seed(seed)  # Para PyTorch
-    torch.cuda.manual_seed(seed)  # Para PyTorch en GPU
-    torch.cuda.manual_seed_all(seed)  # Para todos los dispositivos GPU
-    torch.backends.cudnn.deterministic = True  # Garantiza la determinación del algoritmo de cuDNN
-    torch.backends.cudnn.benchmark = False  # No optimiza los algoritmos si las dimensiones no cambian
+    """Sets the seed for all the relevant libraries."""
+    random.seed(seed)  # For the Python random module
+    np.random.seed(seed)  # For NumPy
+    torch.manual_seed(seed)  # For PyTorch
+    torch.cuda.manual_seed(seed)  # For PyTorch on GPU
+    torch.cuda.manual_seed_all(seed)  # For all GPU devices
+    torch.backends.cudnn.deterministic = True  # Makes the cuDNN algorithm selection deterministic
+    torch.backends.cudnn.benchmark = False  # Does not optimize the algorithms if the dimensions do not change
 

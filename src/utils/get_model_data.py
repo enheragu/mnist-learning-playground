@@ -5,6 +5,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from utils.log_utils import log
 from utils.yaml_utils import getMetricsLogFile
+from utils.deposit_data import getDepositModelData, getDepositAblationLog
 
 
 def _load_single_model_metrics(model_name, model_path, metrics_file_name):
@@ -50,12 +51,10 @@ def getAllModelData(output_path):
 
 
 """
-    Extracts ablation model data from a YAML file in a compatible format 
-    with previous functions and single execution YAML format.
+    Converts the ablation log ({iteration: {condition: trial}}) to a format
+    compatible with previous functions and single execution YAML format.
 """
-def getAblationModelData(ablation_data_file):
-    ablation_metrics = getMetricsLogFile(ablation_data_file)
-
+def ablationLogToModelData(ablation_metrics):
     metrics_data = {}
     for key, iteration in ablation_metrics.items():
         for trial_idx, (condition, trial) in enumerate(iteration.items()):
@@ -74,6 +73,14 @@ def getAblationModelData(ablation_data_file):
     return metrics_data
 
 
+"""
+    Extracts ablation model data from a YAML file in a compatible format 
+    with previous functions and single execution YAML format.
+"""
+def getAblationModelData(ablation_data_file):
+    return ablationLogToModelData(getMetricsLogFile(ablation_data_file))
+
+
 def getAllAndAblationModelData(output_path, ablation_data_file):
     with ThreadPoolExecutor(max_workers=2) as executor:
         future_metrics = executor.submit(getAllModelData, output_path)
@@ -83,3 +90,11 @@ def getAllAndAblationModelData(output_path, ablation_data_file):
         ablation_metrics = future_ablation.result()
 
     return metrics_data, ablation_metrics
+
+
+"""
+    Same data as getAllAndAblationModelData(), read from the data deposit of the
+    article instead of the training outputs (see deposit_data.py).
+"""
+def getDepositAllAndAblationModelData(deposit_path):
+    return getDepositModelData(deposit_path), ablationLogToModelData(getDepositAblationLog(deposit_path))

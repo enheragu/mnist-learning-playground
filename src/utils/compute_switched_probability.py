@@ -9,12 +9,12 @@ montecarlo_samples = 40000 # Slow version :) -> 1000000
 bootstrap_samples = 40000 # Slow version :) -> 100000
 
 """
-    Given 2 sets of data it computes the probability of, when getting one random sample
-    from each of them, the order is switched:
-        So having data from g1 and g2 and mean(g1) > mean(g2);
-        computes p(sample2) > p(sample1)
-    The probability is based on a MonteCarlo simulation (with n_simulations) based on an
-    approximation based on a Normal distribution of the provided data.
+    Given 2 or more sets of data it computes the probability of, when keeping the best of
+    n_samples random samples from each of them (n_samples from 1 to 5), the order is switched:
+        So having data from g1 and g2 and max(g1) > max(g2);
+        computes p(best(samples2) > best(samples1))
+    The samples come from a simulation (with n_simulations): MonteCarlo draws them from a Normal
+    distribution fitted to the provided data, and Bootstrap resamples the provided data.
 """
 def computeSwitchedProbabilityT(dict_data=None, g_names=None, n_simulations = montecarlo_samples, resampling_method = "MonteCarlo", analysis_path = "results/analysis"):
     

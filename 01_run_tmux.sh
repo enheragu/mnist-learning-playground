@@ -10,10 +10,12 @@ done
 SCRIPTFILE_PATH=$SOURCE
 SCRIPT_PATH=$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )
 
-VENV_PATH="$SCRIPT_PATH/../venv/bin/activate"
+# Virtual environment inside the repository (as in the README) or next to it
+VENV_PATH="$SCRIPT_PATH/venv/bin/activate"
+[ -f "$VENV_PATH" ] || VENV_PATH="$SCRIPT_PATH/../venv/bin/activate"
 
 if [ ! -f "$VENV_PATH" ]; then
-  echo "ERROR: Could not find a valid virtual env in: $VENV_PATH"
+  echo "ERROR: Could not find a valid virtual env in $SCRIPT_PATH/venv or $SCRIPT_PATH/../venv"
   exit 1
 fi
 

@@ -22,10 +22,11 @@ from utils.indexer import Indexer
 from utils.log_utils import log, logTable, c_blue, c_green, c_yellow, c_red, c_purple, c_grey, c_darkgrey, color_palette_list
 from utils.log_utils import log, logTable, color_palette_list, bcolors
 from utils.yaml_utils import getMetricsLogFile
-from utils.plot_distribution import plotDataDistribution
+from utils.plot_distribution import plotDataDistribution, PAPER_FIG_SIZE_IN, PAPER_RC
 from models.BatchSizeStudy import CNN_14L_B10, CNN_14L_B25, CNN_14L_B50, CNN_14L_B80
 from models import CNN_14L
-from utils import output_path, ablation_data_file
+from utils import output_path, ablation_data_file, deposit_path, read_deposit, analysis_seed
+from utils.deposit_data import getDepositAblationLog, getDepositModelData
 from utils.compute_switched_probability import computeSwitchedProbability
 
 
@@ -38,7 +39,7 @@ mixedlm_analysis = False
 percentile_analysis = False
 kendall_w_analysis = False
 plot_interaction = True
-add_extra_data = False # Inculdes data from batch size study
+add_extra_data = False # Includes data from the batch size study
 log_complete_table = False  # CSV version is stored anyway
 
 analysis_path = './analysis_results/ablation_anova'
@@ -50,7 +51,7 @@ default_learning_rate = 0.001
 
 
 def get_date_keys(d):
-    """Devuelve las keys que tienen pinta de fecha."""
+    """Returns the keys that look like a date."""
     return [k for k in d.keys() if date_pattern.match(k)]
 
     
@@ -76,52 +77,65 @@ def generate_interaction_plot(df, x_var, y_var, hue_var, title, **kwargs):
         title (str): Title of the plot.
     """
 
-    plt.figure(figsize=(18, 10))
-    num_hue = df[hue_var].nunique()
-    
-    # Add individual points in a single wide column with jitter
-    sns.stripplot(data=df, x=x_var, y=y_var, hue=hue_var,
-                  alpha=0.35, size=10, palette=color_palette_list[:num_hue],
-                  jitter=0.3, legend=False)
-    
-    # Add mean line and summary points separated by hue (on top)
-    sns.pointplot(data=df, x=x_var, y=y_var, hue=hue_var, palette=color_palette_list[:num_hue],    
-        markers='o',        # Asegura que se usen círculos como puntos
-        linestyles='-',     # Línea sólida
-        linewidth=6,       # Grosor de la línea
-        zorder=10,          # Ensure it appears on top
-        **kwargs
-    )
-    plt.title(title)
-    plt.xlabel(x_var.replace('_','').title())
-    plt.ylabel(y_var.replace('_','').title())
-    plt.legend(title=hue_var)
-    plt.subplots_adjust(right=0.95)
-    # plt.show()
-    
-    plt.savefig(os.path.join(analysis_path, f'interaction_plot_{x_var}_{y_var}_{hue_var}.pdf'), format="pdf")
+    # Drawn at its printed size in the article
+    with plt.rc_context(PAPER_RC):
+        plt.figure(figsize=PAPER_FIG_SIZE_IN)
+        num_hue = df[hue_var].nunique()
+
+        # Add individual points in a single wide column with jitter
+        sns.stripplot(data=df, x=x_var, y=y_var, hue=hue_var,
+                      alpha=0.35, size=2, palette=color_palette_list[:num_hue],
+                      jitter=0.3, legend=False)
+
+        # Add mean line and summary points separated by hue (on top)
+        sns.pointplot(data=df, x=x_var, y=y_var, hue=hue_var, palette=color_palette_list[:num_hue],
+            markers='o',        # Ensures circles are used as markers
+            linestyles='-',     # Solid line
+            linewidth=1.5,      # Line width
+            markersize=4,
+            zorder=10,          # Ensure it appears on top
+            seed=analysis_seed, # Bootstrap of the confidence intervals
+            **kwargs
+        )
+        plt.title(title)
+        plt.xlabel(x_var.replace('_', ' ').capitalize())
+        plt.ylabel(y_var.replace('_', ' ').capitalize())
+        plt.legend(title=hue_var.replace('_', ' ').capitalize())
+        plt.tight_layout()
+        # plt.show()
+
+        plt.savefig(os.path.join(analysis_path, f'interaction_plot_{x_var}_{y_var}_{hue_var}.pdf'), format="pdf")
     log(f"Saved interaction plot: {os.path.join(analysis_path, f'interaction_plot_{x_var}_{y_var}_{hue_var}.pdf')}", color=bcolors.OKGREEN)
 
 
+def conditionLabel(condition):
+    """Condition '<batch size>_<learning rate>' or '<batch size>-<learning rate>' in the vocabulary of the article."""
+    batch_size, learning_rate = re.split(r'[_-]', str(condition), maxsplit=1)
+    return f'BS {batch_size}, LR {learning_rate}'
+
+
 def plotScaterplot(pivot_df, output_path='.', filename='scatterplot_conditions'):
-    condiciones = list(pivot_df.columns)
-    pares = list(itertools.combinations(condiciones, 2))
+    conditions = list(pivot_df.columns)
+    pairs = list(itertools.combinations(conditions, 2))
     os.makedirs(output_path, exist_ok=True)
 
-    for cond1, cond2 in pares:
+    for cond1, cond2 in pairs:
         data = pivot_df[[cond1, cond2]].dropna()
-        plt.figure(figsize=(10, 10))
-        sns.scatterplot(x=cond1, y=cond2, data=data)
-        plt.title(f'Accuracy: {cond1} $\\mathit{{vs}}.$ {cond2}')
-        plt.xlabel(cond1)
-        plt.ylabel(cond2)
-        plot_filename = f'{filename}_{cond1}_vs_{cond2}.pdf'
-        filepath = os.path.join(output_path, plot_filename)
-        plt.tight_layout()
-        plt.savefig(filepath, format="pdf", bbox_inches='tight')
-        plt.close()
+        label1, label2 = conditionLabel(cond1), conditionLabel(cond2)
+        # Drawn at its printed size in the article
+        with plt.rc_context(PAPER_RC):
+            plt.figure(figsize=(PAPER_FIG_SIZE_IN[0], PAPER_FIG_SIZE_IN[0]))
+            sns.scatterplot(x=cond1, y=cond2, data=data, color=c_blue, s=8)   # palette blue (no seaborn default)
+            plt.title(f'Accuracy: {label1} $\\mathit{{vs}}.$ {label2}')
+            plt.xlabel(f'{label1} (accuracy, %)')
+            plt.ylabel(f'{label2} (accuracy, %)')
+            plot_filename = f'{filename}_{cond1}_vs_{cond2}.pdf'
+            filepath = os.path.join(output_path, plot_filename)
+            plt.tight_layout()
+            plt.savefig(filepath, format="pdf", bbox_inches='tight')
+            plt.close()
 
-    print(f"Plots guardados en: {output_path}")
+    print(f"Plots saved to: {output_path}")
 
 
 """
@@ -242,7 +256,7 @@ if __name__ == "__main__":
 
     train_duration = []
     indexer = Indexer()
-    ablation_metrics = getMetricsLogFile(ablation_data_file)
+    ablation_metrics = getDepositAblationLog(deposit_path) if read_deposit else getMetricsLogFile(ablation_data_file)
     ablation_matrix = []
     table_keys = [['index', 'seed','batch_size', 'learning_rate', 'accuracy']]
     
@@ -281,7 +295,10 @@ if __name__ == "__main__":
     if add_extra_data:
         log(f"Adding extra data from batch size study", color=bcolors.OKCYAN)
         for model in [CNN_14L, CNN_14L_B10, CNN_14L_B25, CNN_14L_B50, CNN_14L_B80]:
-            model_metrics = getMetricsLogFile(os.path.join(output_path, model.__name__, f"randomseed_training_metrics.yaml"))
+            if read_deposit:
+                model_metrics = getDepositModelData(deposit_path)[model.__name__]
+            else:
+                model_metrics = getMetricsLogFile(os.path.join(output_path, model.__name__, f"randomseed_training_metrics.yaml"))
             for key, trial in model_metrics.items():
                 ablation_row, log_ablation_row, time = extractMetrics(trial, default_learning_rate, model.batch_size)
                 
@@ -327,7 +344,7 @@ if __name__ == "__main__":
     variable_learnr = 'C(learning_rate)'
 
     ##################################
-    ##  Regresion with ANOVA table  ##
+    ##  Regression with ANOVA table ##
     ##################################
     if anova_table_analysis:
         # pd.set_option('display.float_format', '{:.25e}'.format)
@@ -387,8 +404,8 @@ if __name__ == "__main__":
                 dv='accuracy',
                 within=factor_list,
                 subject=subject,
-                correction=True,  # Aplica la corrección si es necesaria
-                detailed=True     # Muestra la tabla completa
+                correction=True,  # Applies the correction if needed
+                detailed=True     # Shows the full table
             )
             log(f"Greenhouse-Geisser annova correcte: \n{aov}")
         
@@ -400,7 +417,7 @@ if __name__ == "__main__":
     ###   Mixed effects models   ##
     ###############################
     if mixedlm_analysis:
-        # El término '1|index' le dice al modelo que cada index tiene su propia intercepción base (efecto aleatorio)
+        # The '1|index' term tells the model that each index has its own base intercept (random effect)
         fixed_effects_formula = f'accuracy ~ {variable_batch} * {variable_learnr} + (1 | index)' 
         log(f"\nFitting Model with Random Intercepts from {fixed_effects_formula}:", color=bcolors.OKCYAN)
         try:
@@ -449,12 +466,12 @@ if __name__ == "__main__":
         # Percentile table (percentiles go from 0 to 1, where 1 is the best seed performance in that condition)        
         log(f"Percentile talbe indexed by seed:\n{percentile_table}")
 
-        # Calcular la matriz de correlación entre condiciones
+        # Compute the correlation matrix between conditions
         correlations = percentile_table.corr(method='spearman')
 
         total_repeated_table = (df_percentile.groupby('condition')['accuracy'].apply(lambda x: x.value_counts().loc[lambda v: v > 1].sum())
                                 .reset_index(name='total_repetitions'))
-        values_repeated_empates = (df_percentile.groupby('condition')['percentile_within_condition'].apply(lambda x: x.value_counts().loc[lambda v: v > 1].count())
+        values_repeated_ties = (df_percentile.groupby('condition')['percentile_within_condition'].apply(lambda x: x.value_counts().loc[lambda v: v > 1].count())
                                 .reset_index(name='repeated_percentiles'))
         unique_percentiles = (df_percentile.groupby('condition')['percentile_within_condition'].nunique()
                                 .reset_index(name='unique_percentiles'))
@@ -462,7 +479,7 @@ if __name__ == "__main__":
                                 .reset_index(name='accuracy_amplitude'))
         
         summary_table = total_repeated_table \
-            .merge(values_repeated_empates, on='condition') \
+            .merge(values_repeated_ties, on='condition') \
             .merge(unique_percentiles, on='condition') \
             .merge(accuracy_amplitude, on='condition')
         print(summary_table)
@@ -476,7 +493,7 @@ if __name__ == "__main__":
         plotScaterplot(pivot_df, output_path=analysis_path, filename='scatterplot_conditions')
         # g = sns.PairGrid(plot_df)
         # g.map_lower(sns.scatterplot)  # Only lower part of the matrix, remove repeated and diagonal
-        # plt.suptitle('Scatterplots de accuracies entre condiciones', y=1.02)
+        # plt.suptitle('Accuracy scatterplots between conditions', y=1.02)
         # plt.show()
 
         from tabulate import tabulate 
@@ -536,26 +553,30 @@ if __name__ == "__main__":
         with open(f'{analysis_path}/tables/best_seed_percentage.tex', 'w', encoding='utf-8') as f:
             f.write(log_df.to_latex())
 
-        plt.figure(figsize=(12, 7))
         # Create labels for the x-axis that combine batch_size and learning_rate
         best_config_counts['combo_label'] = best_config_counts.apply(
-            lambda row: f"BS:{int(row['batch_size'])}\nLR:{row['learning_rate']}", axis=1
+            lambda row: f"BS {int(row['batch_size'])}\nLR {row['learning_rate']}", axis=1
         )
-        sns.barplot(
-            data=best_config_counts.sort_values(by='percentage', ascending=False),
-            x='combo_label',
-            y='percentage',
-            palette=color_palette_list # Choose a color palette
-        )
-        plt.title('Percentage of Seeds for which each HP Combination is "Best"', fontsize=20)
-        plt.xlabel('Hyperparameter Combination', fontsize=20)
-        plt.ylabel('Percentage of Seeds (%)', fontsize=20)
-        plt.xticks(fontsize=18)
-        plt.yticks(fontsize=18)
-        # plt.xticks(rotation=45, ha='right') # Rotate labels for better readability
-        plt.grid(axis='y', linestyle='--', alpha=0.7)
-        plt.tight_layout()
-        plt.savefig(os.path.join(analysis_path, 'best_hp_combination_per_seed_bar_chart.pdf'), format='pdf')
+        # Drawn at its printed size in the article
+        with plt.rc_context(PAPER_RC):
+            plt.figure(figsize=(PAPER_FIG_SIZE_IN[0], 2.4))
+            sns.barplot(
+                data=best_config_counts.sort_values(by='percentage', ascending=False),
+                x='combo_label',
+                y='percentage',
+                hue='combo_label',
+                palette=color_palette_list[:len(best_config_counts)], # Choose a color palette
+                saturation=1, # keep the palette hex as is (seaborn desaturates bars to 0.75 by default)
+                legend=False,
+            )
+            plt.title('Percentage of Seeds for which\neach HP Combination is "Best"')
+            plt.xlabel('Hyperparameter Combination')
+            plt.ylabel('Percentage of Seeds (%)')
+            plt.xticks(fontsize=6.5)
+            # plt.xticks(rotation=45, ha='right') # Rotate labels for better readability
+            plt.grid(axis='y', linestyle='--', alpha=0.7)
+            plt.tight_layout()
+            plt.savefig(os.path.join(analysis_path, 'best_hp_combination_per_seed_bar_chart.pdf'), format='pdf')
 
     ########################################################################
     ##   Analysis: Kendall's W (Consistency of HP Combination Rankings)   ##
@@ -654,8 +675,9 @@ if __name__ == "__main__":
     ##  Interaction plots  ##
     #########################
     if plot_interaction:
-        generate_interaction_plot(df, 'batch_size', 'accuracy', 'learning_rate', r'Interaction Plot: Batch Size $\mathit{vs}.$ Accuracy by Learning Rate')
-        generate_interaction_plot(df, 'learning_rate', 'accuracy', 'batch_size', r'Interaction Plot: Learning Rate $\mathit{vs}.$ Accuracy by Batch Size')
+        np.random.seed(analysis_seed)  # jitter of the points
+        generate_interaction_plot(df, 'batch_size', 'accuracy', 'learning_rate', 'Interaction Plot:\n' r'Batch Size $\mathit{vs}.$ Accuracy by Learning Rate')
+        generate_interaction_plot(df, 'learning_rate', 'accuracy', 'batch_size', 'Interaction Plot:\n' r'Learning Rate $\mathit{vs}.$ Accuracy by Batch Size')
         
         # Order indexes based on accuracy for a given learning rate level
         df['index'] = df['index'].astype('category')
@@ -691,7 +713,7 @@ if __name__ == "__main__":
                         ['10-0.001', '40-0.001', '70-0.001'],
                         ['10-0.005', '40-0.005', '70-0.005'],
                         ['10-0.01', '40-0.01', '70-0.01'],
-                        all_models],
+                        sorted(all_models)],
                             color_list=[
                             [c_purple, c_yellow, c_grey],
                             [c_purple, c_yellow, c_grey],
@@ -701,15 +723,18 @@ if __name__ == "__main__":
                             [c_purple, c_yellow, c_grey],
                             color_palette_list],
                             analysis_path = analysis_path,
-                            single_plots = False)
+                            single_plots = False,
+                            paper_size = True)
     
 
     accuracy_data = {}
     for model, data in metrics_data.items():
         accuracy_data[model] = [entry['accuracy']*100 for entry in metrics_data[model].values()]
+    np.random.seed(analysis_seed)
     computeSwitchedProbability(accuracy_data, ['10-0.001', '10-0.005', '10-0.01',
                                                 '40-0.001', '40-0.005', '40-0.01',
                                                 '70-0.001', '70-0.005', '70-0.01'], analysis_path)
 
 
+    np.random.seed(analysis_seed)
     computeAblationDecisionErrorProbability(df)

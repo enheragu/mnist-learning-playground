@@ -109,7 +109,7 @@ def yolo_results_csv_to_metrics_run(csv_path):
     }
 
 
-def discoverYoloResultsCSV(experiment_output_path):
+def discoverYoloResultsCSV(experiment_output_path, valid_runs=None):
     csv_paths = []
     missing_csv_dirs = []
 
@@ -119,6 +119,8 @@ def discoverYoloResultsCSV(experiment_output_path):
             continue
 
         has_args = 'args.yaml' in filenames
+        if valid_runs is not None and has_args and os.path.normpath(dirpath) not in valid_runs:
+            continue
         has_results_csv = 'results.csv' in filenames
 
         if has_results_csv:
@@ -415,8 +417,9 @@ def runYoloOverfitAnalysis(variance_tasks,
             log(f"[runYoloOverfitAnalysis] Consensus for '{tag}': {consensus_label} ({interpretation_counts})", bcolors.OKBLUE)
 
 
-def collectYoloBestMetrics(variance_tasks, include_tags=None):
+def collectYoloBestMetrics(variance_tasks, include_tags=None, valid_runs=None):
     """For each task collect the best (max over epochs) mAP50 and mAP50-95 per run.
+    If valid_runs is given, only those run folders are used (see utils/yolo_run_validity.py).
 
     Returns:
         survival_map50_data:   {tag: [best_mAP50_per_run]}
@@ -432,7 +435,7 @@ def collectYoloBestMetrics(variance_tasks, include_tags=None):
         if os.path.exists(os.path.join(experiment_output_path, '.exclude_from_analysis')):
             log(f"[collectYoloBestMetrics] Skipping '{tag}' due to .exclude_from_analysis marker", bcolors.WARNING)
             continue
-        csv_paths, _ = discoverYoloResultsCSV(experiment_output_path)
+        csv_paths, _ = discoverYoloResultsCSV(experiment_output_path, valid_runs=valid_runs)
         best_map50 = []
         best_map5095 = []
         for csv_path in csv_paths:

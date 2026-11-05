@@ -11,7 +11,7 @@ class DNN_6L(BaseModelTrainer):
     def __init__(self, input_size, num_classes, learning_rate=0.001, patience=10, seed=42, output_path=""):
         super(DNN_6L, self).__init__(input_size, num_classes, learning_rate, patience, output_path=output_path)
 
-        # Definir las capas de la red
+        # Define the network layers
         self.fc1 = nn.Linear(input_size, 2500).to(self.device)   # Hidden layer 1
         self.fc2 = nn.Linear(2500, 2000).to(self.device)         # Hidden layer 2
         self.fc3 = nn.Linear(2000, 1500).to(self.device)         # Hidden layer 3
@@ -23,7 +23,7 @@ class DNN_6L(BaseModelTrainer):
         log(f"[{self.model_name}] Initialization of model complete, get into training process.")
 
     def forward(self, x):
-        # Aplanar la entrada (784)
+        # Flatten the input (784)
         x = x.view(-1, 28 * 28)
         
         x = torch.relu(self.fc1(x))  # ReLu for layer 1
@@ -39,10 +39,10 @@ class DNN_6L(BaseModelTrainer):
 
     def _initialize_weights(self, seed):
         self.seed = seed
-        """Inicializa los pesos de cada capa de manera uniforme."""
-        torch.manual_seed(seed)  # Asegura que la inicialización de pesos sea consistente
+        """Initializes the weights of each layer uniformly."""
+        torch.manual_seed(seed)  # Ensures the weight initialization is consistent
         
-        # Inicializar pesos para cada capa
+        # Initialize the weights of each layer
         for module in self.modules():
             if isinstance(module, nn.Linear):
                 nn.init.uniform_(module.weight, a=-0.1, b=0.1)

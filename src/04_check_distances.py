@@ -7,8 +7,8 @@ from itertools import combinations
 
 from utils.log_utils import log, logTable, c_blue, c_green, c_yellow, c_red, c_purple, c_grey, c_darkgrey, color_palette_list
 from utils.plot_distribution import plotDataDistribution
-from utils import output_path, ablation_data_file
-from utils import getAllModelData, getAblationModelData, getAllAndAblationModelData
+from utils import output_path, ablation_data_file, deposit_path, read_deposit
+from utils import getAllModelData, getAblationModelData, getAllAndAblationModelData, getDepositAllAndAblationModelData
 
 analysis_path = './analysis_results/distances'
 
@@ -126,6 +126,7 @@ def compute_metrics(error_rates):
 if __name__ == "__main__":
 
     os.makedirs(analysis_path, exist_ok=True)
+    os.makedirs(os.path.join(analysis_path, 'single_model'), exist_ok=True)
     
     error_rates_da = list(error_rates['data_augmentated'].values())
     error_rates_nda = list(error_rates['no_data_augmentation'].values())
@@ -143,7 +144,10 @@ if __name__ == "__main__":
     logTable(log_data, analysis_path, f'Distances Analysis')
 
 
-    metrics_data, ablation_metrics = getAllAndAblationModelData(output_path, ablation_data_file)
+    if read_deposit:
+        metrics_data, ablation_metrics = getDepositAllAndAblationModelData(deposit_path)
+    else:
+        metrics_data, ablation_metrics = getAllAndAblationModelData(output_path, ablation_data_file)
     all_models = metrics_data.keys()
 
     accuracy_agugmentation = [100-item for item in error_rates["data_augmentated"].values()]
@@ -160,7 +164,8 @@ if __name__ == "__main__":
                              color_palette_list,
                              [c_purple]],
                         vertical_lines_acc=vertical_lines_acc,
-                        analysis_path=analysis_path)
+                        analysis_path=analysis_path,
+                        paper_size=True)
 
     all_models = ablation_metrics.keys()
     
@@ -172,5 +177,6 @@ if __name__ == "__main__":
                             #  [c_yellow, c_red, c_purple, c_grey],
                              color_palette_list],
                         vertical_lines_acc=vertical_lines_acc,
-                        analysis_path=analysis_path)
+                        analysis_path=analysis_path,
+                        paper_size=True)
     

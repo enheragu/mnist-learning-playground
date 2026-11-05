@@ -1,6 +1,13 @@
 venv
 data
-output_data 
+output_data
 __pycache__
 .vscode
 analysis_results
+.mypy_cache
+.secrets
+zenodo_export
+output_data_gpucheck_*/
+scripts/gpu_check/*.log
+scripts/gpu_check/probe_results/
+resume/

@@ -8,5 +8,6 @@ tabulate
 tqdm
 pandas
 pyarrow
+pyyaml
 statsmodels
 pingouin

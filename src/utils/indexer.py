@@ -5,11 +5,11 @@ class Indexer:
         self.data2index = {}
         self.next_index = 0
 
-    def get_index(self, dato = None):
-        if dato not in self.data2index:
-            self.data2index[dato] = self.next_index
+    def get_index(self, datum = None):
+        if datum not in self.data2index:
+            self.data2index[datum] = self.next_index
             self.next_index += 1
-        elif dato is None:
-            self.data2index[dato] = self.next_index
+        elif datum is None:
+            self.data2index[datum] = self.next_index
             self.next_index += 1
-        return self.data2index[dato]
+        return self.data2index[datum]

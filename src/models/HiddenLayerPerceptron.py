@@ -19,7 +19,7 @@ class HiddenLayerPerceptron(BaseModelTrainer):
         log(f"[{self.model_name}] Initialization of model complete, get into training process.")
 
     def forward(self, x):
-        # Aplanar la imagen 28x28 a un vector de tamaño 784
+        # Flatten the 28x28 image into a vector of size 784
         x = x.view(-1, 28 * 28)  
         x = torch.relu(self.fc1(x))
         x = self.fc2(x)
@@ -28,10 +28,10 @@ class HiddenLayerPerceptron(BaseModelTrainer):
 
     def _initialize_weights(self, seed):
         self.seed = seed
-        """Inicializa los pesos de manera fija."""
-        torch.manual_seed(seed)  # Asegura que la inicialización de pesos sea consistente
+        """Initializes the weights in a fixed way."""
+        torch.manual_seed(seed)  # Ensures the weight initialization is consistent
         
-        # Inicializar pesos de fc1
+        # Initialize the fc1 weights
         for module in self.modules():
             if isinstance(module, nn.Linear):
                 nn.init.uniform_(module.weight, a=-0.1, b=0.1)

@@ -35,20 +35,20 @@ class MaxOutLayer(nn.Module):
 
 
 class MINBlock(nn.Module):
-    """Un bloque MIN (Convolución + MLP Maxout + Pooling + Dropout)."""
+    """A MIN block (Convolution + Maxout MLP + Pooling + Dropout)."""
     def __init__(self, in_channels, conv_out_channels, mlp_out1, mlp_out2, kernel_size, stride, padding, k, pool_kernel, pool_stride, dropout_rate):
         super(MINBlock, self).__init__()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.conv = nn.Conv2d(in_channels, conv_out_channels, kernel_size=kernel_size, stride=stride, padding=padding).to(self.device)
         self.bn = nn.BatchNorm2d(conv_out_channels).to(self.device)
         self.mlp1 = nn.Sequential(
-            # MaxoutHiddenLayer modeled with Conv2d in pytorch for better optimization ¿?
+            # MaxoutHiddenLayer modeled with Conv2d in pytorch for better optimization (?)
             nn.Conv2d(conv_out_channels, mlp_out1, kernel_size=1, stride=1, padding=0),
             MaxOutLayer(mlp_out1, mlp_out1, k),
             nn.BatchNorm2d(mlp_out1)
         ).to(self.device)
         self.mlp2 = nn.Sequential(
-            # MaxoutHiddenLayer modeled with Conv2d in pytorch for better optimization ¿?
+            # MaxoutHiddenLayer modeled with Conv2d in pytorch for better optimization (?)
             nn.Conv2d(mlp_out1, mlp_out2, kernel_size=1, stride=1, padding=0),
             MaxOutLayer(mlp_out2, mlp_out2, k),
             nn.BatchNorm2d(mlp_out2)
@@ -90,7 +90,7 @@ class BatchNormMaxoutNetInNet(BaseModelTrainer):
             mlp_out1=96, mlp_out2=10,  k=5, 
             pool_kernel=1, pool_stride=1, dropout_rate=0.0
         ).to(self.device)
-        # self.fc = nn.Linear(128 * 24 * 24, num_classes)  # 128 * 24 * 24 es el tamaño de salida después de la convolución
+        # self.fc = nn.Linear(128 * 24 * 24, num_classes)  # 128 * 24 * 24 is the output size after the convolution
 
         self._initialize_weights(seed)
         log(f"[{self.model_name}] Initialization of model complete, get into training process.")
@@ -103,7 +103,7 @@ class BatchNormMaxoutNetInNet(BaseModelTrainer):
         # print(f"[BatchNormMaxoutNetInNet::forward] After second block: {x.shape}")
         x = self.block3(x)
         # print(f"[BatchNormMaxoutNetInNet::forward] Before flattening: {x.shape}")  # Debugging line: Check shape before flattening
-        x = x.view(x.size(0), -1)  # Aplana para softmax
+        x = x.view(x.size(0), -1)  # Flatten for softmax
         # print(f"[BatchNormMaxoutNetInNet::forward] After flattening: {x.shape}")  # Debugging line: Check shape after flattening
         # x = self.fc(x)
         return F.log_softmax(x, dim=1)

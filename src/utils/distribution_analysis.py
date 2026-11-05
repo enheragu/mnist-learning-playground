@@ -7,14 +7,14 @@ from scipy.stats import norm, gamma, shapiro, kurtosis
 from utils.log_utils import log, logTable
 
 
+# Both amplitudes span from percentile 0.1 to percentile 99.9, an interval that covers 99.8% of the distribution
 def normal_amplitude(data):
     mean = np.mean(data)
     std = np.std(data)
 
-    percentile_0_5 = norm.ppf(0.001, loc=mean, scale=std)
-    percentile_99_5 = norm.ppf(0.999, loc=mean, scale=std)
-    amplitude_99 = percentile_99_5 - percentile_0_5
-    return amplitude_99
+    percentile_0_1 = norm.ppf(0.001, loc=mean, scale=std)
+    percentile_99_9 = norm.ppf(0.999, loc=mean, scale=std)
+    return percentile_99_9 - percentile_0_1
 
 
 def gamma_amplitude(data):
@@ -26,10 +26,9 @@ def gamma_amplitude(data):
 
     k, loc, scale = gamma.fit(positive_data, floc=0)
 
-    percentile_0_5 = gamma.ppf(0.001, k, loc, scale)
-    percentile_99_5 = gamma.ppf(0.999, k, loc, scale)
-    amplitude_99 = percentile_99_5 - percentile_0_5
-    return amplitude_99
+    percentile_0_1 = gamma.ppf(0.001, k, loc, scale)
+    percentile_99_9 = gamma.ppf(0.999, k, loc, scale)
+    return percentile_99_9 - percentile_0_1
 
 
 def normalityTest(metrics_data,
@@ -44,15 +43,15 @@ def normalityTest(metrics_data,
 
     row_data = [['Model', 'Median (%)', 'Mean (%)', 'Kurtosis (Fisher)', 'Shapiro-Wilk: W', 'Shapiro-Wilk: p-value (%)']]
     for model_name, data in metric_data.items():
-        estadistico, p_valor = shapiro(data)
+        statistic, p_value = shapiro(data)
         kurt = kurtosis(data, fisher=True)
         row_data.append([
             f"{model_name} (n={len(data)})",
             f"{np.median(data):.3f}",
             f"{np.mean(data):.3f}",
             f"{kurt:.4f}",
-            f"{estadistico:.4f}",
-            f"{p_valor:.4f}",
+            f"{statistic:.4f}",
+            f"{p_value:.4f}",
         ])
 
     log(f"\nSummary Table of {metric.title()} Shapiro-Wilk normality test:")
@@ -78,7 +77,7 @@ def maxAmplitude(metrics_data,
     for model, data in metrics_data.items():
         metric_data[model] = [entry[metric] * unit_multiplier for entry in metrics_data[model].values()]
 
-    row_data = [['Model', f'mean{unit}', f'min{unit}', f'max{unit}', f'Data Amplitude{unit}', f'Amplitude 99.9% Interval Distribution{unit}']]
+    row_data = [['Model', f'mean{unit}', f'min{unit}', f'max{unit}', f'Data Amplitude{unit}', f'Amplitude 99.8% Interval Distribution{unit}']]
     sortable_rows = []
     for model_name, data in metric_data.items():
         data_array = np.asarray(data, dtype=float)

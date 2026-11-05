@@ -2,6 +2,7 @@
 # encoding: utf-8
 
 import os
+import re
 import itertools
 
 import numpy as np
@@ -9,13 +10,28 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.ticker import MaxNLocator
 
-from utils.log_utils import log, logTable, c_grey, color_palette_list
+from utils.log_utils import log, logTable, c_grey, c_darkgrey, color_palette_list
+from utils.plot_distribution import display_name
 from utils.compute_switched_probability import bootstrap_samples, montecarlo_samples
 from utils.sampling_param_compute import (
     compute_sampling_error_curve,
     compute_at_least_one_exceedance_probability_curve,
     get_sampling_method_label,
 )
+
+# Figures are drawn at their printed size (column width of the paper, cas-dc: 3.3 in) so the typeset text is not
+# scaled; sizes as in STYLE_GUIDE 12.2 of the paper series.
+FIG_WIDTH_IN = 3.3
+PLOT_HEIGHT_IN = 2.7
+PLOT_DERIVATIVE_HEIGHT_IN = 3.6
+LEGEND_FONTSIZE = 6.5
+PAPER_RC = {'font.size': 8, 'axes.titlesize': 8, 'axes.labelsize': 8, 'xtick.labelsize': 7.5,
+            'ytick.labelsize': 7.5, 'legend.fontsize': LEGEND_FONTSIZE, 'axes.linewidth': 0.6}
+
+_PLOT_METHOD_LABEL = {'analytical': 'Analytical formula', 'bootstrap': 'Bootstrap', 'montecarlo': 'Monte Carlo'}
+_METRIC_LABEL = {'accuracy': 'accuracy', 'mAP50': 'mAP$_{50}$', 'mAP50-95': 'mAP$_{50-95}$', 'P': 'precision',
+                 'R': 'recall'}
+_MNIST_LABEL = {'SimplePerceptron': 'Simple Perceptron', 'HiddenLayerPerceptron': 'Hidden Layer Perceptron'}
 
 
 def _resolve_simulation_iterations(sampling_method, n_iterations):
@@ -28,6 +44,118 @@ def _resolve_simulation_iterations(sampling_method, n_iterations):
     return 0
 
 
+def _curve_label(name):
+    """Legend label in the vocabulary of the paper: YOLOv8 groups through display_name(); the CNN_14L batch size
+    variants as 'CNN_14L, BS b' and the ablation conditions as 'BS b, LR l' (batch size, learning rate)."""
+    match = re.fullmatch(r'CNN_14L_B(\d+)_L([\d.]+)', name)
+    if match:
+        return f'BS {match.group(1)}, LR {match.group(2)}'
+    match = re.fullmatch(r'CNN_14L_B(\d+)', name)
+    if match:
+        return f'CNN_14L, BS {match.group(1)}'
+    return _MNIST_LABEL.get(name, display_name(name))
+
+
+def _plot_method_label(sampling_method, simulation_iterations):
+    label = _PLOT_METHOD_LABEL.get(sampling_method, sampling_method)
+    return label if sampling_method == 'analytical' else f"{label}, {simulation_iterations:,} samples"
+
+
+def _new_figure(plot_derivative):
+    if plot_derivative:
+        fig, (ax, ax2) = plt.subplots(2, 1, sharex=True, figsize=(FIG_WIDTH_IN, PLOT_DERIVATIVE_HEIGHT_IN),
+                                      gridspec_kw={'height_ratios': [2.6, 1.0]})
+        ax2.set_ylabel('Derivative')
+    else:
+        fig, ax = plt.subplots(figsize=(FIG_WIDTH_IN, PLOT_HEIGHT_IN))
+        ax2 = None
+    return fig, ax, ax2
+
+
+def _legend_at_axes_width(fig, ax, handles, labels, ncol, y_anchor):
+    """Legend below the axes with its frame exactly as wide as the axes frame (STYLE_GUIDE 12.2): the spacing
+    between columns absorbs the free width and the frame keeps its inner margins."""
+    fig.canvas.draw()
+    box = ax.get_position()
+    unit = LEGEND_FONTSIZE * fig.dpi / 72
+    spacing = 1.0
+    if ncol == 1:
+        leg = fig.legend(handles, labels, loc='lower left', ncol=1, fontsize=LEGEND_FONTSIZE, frameon=True,
+                         framealpha=0.9, edgecolor='0.2', borderpad=0.9, handlelength=1.4, handletextpad=0.5, labelspacing=0.3,
+                         mode='expand', borderaxespad=0, bbox_to_anchor=(box.x0, y_anchor, box.width, 0))
+        fig.canvas.draw()
+        return leg
+    for _ in range(8):
+        leg = fig.legend(handles, labels, loc='lower center', ncol=ncol, fontsize=LEGEND_FONTSIZE, frameon=True,
+                         framealpha=0.9, edgecolor='0.2', borderpad=0.9, handlelength=1.4, handletextpad=0.5, labelspacing=0.3,
+                         bbox_to_anchor=(box.x0 + box.width / 2, y_anchor), columnspacing=spacing)
+        fig.canvas.draw()
+        gap = ax.get_window_extent().width - leg.get_window_extent().width
+        if abs(gap) < 0.5:
+            break
+        leg.remove()
+        spacing += gap / unit / max(ncol - 1, 1)
+    else:
+        raise AssertionError('legend width does not converge to the axes width')
+    if spacing < 0.5:
+        leg.remove()
+        raise AssertionError('legend entries do not fit in the axes width')
+    renderer = fig.canvas.get_renderer()
+    frame = leg.get_frame().get_window_extent(renderer)
+    handles_drawn = getattr(leg, 'legend_handles', None) or leg.legendHandles
+    left = (min(h.get_window_extent(renderer).x0 for h in handles_drawn) - frame.x0) * 72 / fig.dpi
+    right = (frame.x1 - max(t.get_window_extent(renderer).x1 for t in leg.get_texts())) * 72 / fig.dpi
+    if min(left, right) < 4:
+        leg.remove()
+        raise AssertionError(f'legend entries too close to the frame ({left:.1f} / {right:.1f} pt)')
+    return leg
+
+
+def _finish_figure(fig, ax, ax2, handles, labels, title, y_label, sample_sizes, max_ncol):
+    """Titles, axes, grid and a legend below the plot, as wide as the axes; the figure grows to hold the legend."""
+    ax.set_title(title)
+    ax.set_ylabel(y_label)
+    (ax2 if ax2 is not None else ax).set_xlabel('Number of runs (N)')
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
+    # X ticks include the first and last sample size and a few intermediate ones
+    n = len(sample_sizes)
+    indices = np.unique(np.round(np.linspace(0, n - 1, min(8, n))).astype(int))
+    for axis in [a for a in (ax, ax2) if a is not None]:
+        axis.set_xticks(sample_sizes[indices])
+        axis.grid(visible=True, color=c_grey, linestyle='--', linewidth=0.5, alpha=0.7)
+        axis.tick_params(length=2.5, pad=2)
+    if ax2 is not None:
+        fig.align_ylabels([ax, ax2])
+
+    fig.tight_layout(pad=0.3)
+    if not labels:
+        return
+
+    # First pass: the most columns that fit in the axes width, and the height the legend needs
+    for ncol in range(min(max_ncol, len(labels)), 0, -1):
+        try:
+            leg = _legend_at_axes_width(fig, ax, handles, labels, ncol, 0.0)
+            break
+        except AssertionError:
+            continue
+    else:
+        raise RuntimeError('legend does not fit in the axes width')
+    legend_height_in = leg.get_window_extent().height / fig.dpi
+    leg.remove()
+
+    # Second pass: grow the figure below the plot and place the legend there
+    gap_in = 0.45 if ax2 is None else 0.4
+    plot_height_in = fig.get_figheight()
+    total_height_in = plot_height_in + legend_height_in + gap_in
+    fig.set_size_inches(FIG_WIDTH_IN, total_height_in)
+    fig.tight_layout(pad=0.3, rect=(0, (legend_height_in + gap_in) / total_height_in, 1, 1))
+    leg = _legend_at_axes_width(fig, ax, handles, labels, ncol, 0.02 / total_height_in)
+    fig.canvas.draw()
+    log(f"  legend: {ncol} columns, {leg.get_window_extent().width / fig.dpi:.3f} in wide, "
+        f"axes {ax.get_window_extent().width / fig.dpi:.3f} in")
+
+
 def plot_sampling_graph(metrics_data,
                         analysis_path,
                         metric='accuracy',
@@ -38,7 +166,7 @@ def plot_sampling_graph(metrics_data,
                         n_iterations=None,
                         curve_method=compute_sampling_error_curve,
                         curve_kwargs=None,
-                        title_template='Sampling curve ({method_label})',
+                        title_template='Sampling curve\n{method_label}',
                         y_label='Value',
                         filename_prefix='sampling_curve',
                         table_title_prefix='Sampling Curve',
@@ -53,134 +181,78 @@ def plot_sampling_graph(metrics_data,
     for model, data in metrics_data.items():
         metric_data[model] = [entry[metric] * 100 for entry in metrics_data[model].values()]
 
-    if plot_derivative:
-        # increase height so stacked subplots remain readable
-        fig, (ax, ax2) = plt.subplots(2, 1, sharex=True, figsize=(14, 16), gridspec_kw={'height_ratios': [2.8, 1.2]})
-        ax2.set_ylabel('Derivative')
-    else:
-        fig, ax = plt.subplots(figsize=(14, 13))
-        ax2 = None
+    with plt.rc_context(PAPER_RC):
+        fig, ax, ax2 = _new_figure(plot_derivative)
 
-    color_iterator = itertools.cycle(color_list)
-    method_label = get_sampling_method_label(sampling_method)
-    simulation_iterations = _resolve_simulation_iterations(sampling_method, n_iterations)
-    display_method_label = method_label if sampling_method == 'analytical' else f"{method_label} - {simulation_iterations} samples"
-    
-    idx_n1 = 0
-    idx_n5 = 4
-    idx_n10 = 9
-    idx_q25 = int(len(sample_sizes) * 0.25)
-    idx_q50 = int(len(sample_sizes) * 0.5)
-    idx_nlast = -1
+        color_iterator = itertools.cycle(color_list)
+        method_label = get_sampling_method_label(sampling_method)
+        simulation_iterations = _resolve_simulation_iterations(sampling_method, n_iterations)
+        display_method_label = method_label if sampling_method == 'analytical' else f"{method_label} - {simulation_iterations} samples"
 
-    table_checkpoints = [
-        (f'N={sample_sizes[idx_n1]}', idx_n1, sample_sizes[idx_n1]),
-        (f'N={sample_sizes[idx_n5]}', idx_n5, sample_sizes[idx_n5]),
-        (f'N={sample_sizes[idx_n10]}', idx_n10, sample_sizes[idx_n10]),
-        (f'N≈25% (N={sample_sizes[idx_q25]})', idx_q25, sample_sizes[idx_q25]),
-        (f'N≈50% (N={sample_sizes[idx_q50]})', idx_q50, sample_sizes[idx_q50]),
-        (f'N={sample_sizes[idx_nlast]}', idx_nlast, sample_sizes[idx_nlast]),
-    ]
-    table_checkpoints = sorted(table_checkpoints, key=lambda item: item[2])
+        idx_n1 = 0
+        idx_n5 = 4
+        idx_n10 = 9
+        idx_q25 = int(len(sample_sizes) * 0.25)
+        idx_q50 = int(len(sample_sizes) * 0.5)
+        idx_nlast = -1
 
-    row_data = [['Model'] + [label for label, _, _ in table_checkpoints]]
-    curve_values_all = []
-    for model_name, data in metric_data.items():
-        if plot_models and model_name not in plot_models:
-            # log(f"[plot_sampling_graph] Skipping model {model_name} as it is not in plot_models {plot_models}.")
-            continue
+        table_checkpoints = [
+            (f'N={sample_sizes[idx_n1]}', idx_n1, sample_sizes[idx_n1]),
+            (f'N={sample_sizes[idx_n5]}', idx_n5, sample_sizes[idx_n5]),
+            (f'N={sample_sizes[idx_n10]}', idx_n10, sample_sizes[idx_n10]),
+            (f'N≈25% (N={sample_sizes[idx_q25]})', idx_q25, sample_sizes[idx_q25]),
+            (f'N≈50% (N={sample_sizes[idx_q50]})', idx_q50, sample_sizes[idx_q50]),
+            (f'N={sample_sizes[idx_nlast]}', idx_nlast, sample_sizes[idx_nlast]),
+        ]
+        table_checkpoints = sorted(table_checkpoints, key=lambda item: item[2])
 
-        curve_values = curve_method(
-            data=data,
-            sample_sizes=sample_sizes,
-            method=sampling_method,
-            n_iterations=simulation_iterations,
-            **curve_kwargs,
-        )
-        curve_values_all.append(curve_values)
-        curve_values = np.asarray(curve_values, dtype=float)
-        valid_points = np.isfinite(curve_values)
-        primary_color = next(color_iterator)
-        ax.plot(sample_sizes[valid_points], curve_values[valid_points], linestyle='--', alpha=0.5, label=f'{model_name}', color=primary_color, linewidth=2)
+        row_data = [['Model'] + [label for label, _, _ in table_checkpoints]]
+        curve_values_all = []
+        for model_name, data in metric_data.items():
+            if plot_models and model_name not in plot_models:
+                continue
 
-        if plot_derivative and np.sum(valid_points) >= 2 and ax2 is not None:
-            deriv_vals = np.gradient(curve_values[valid_points], sample_sizes[valid_points])
-            # plot derivative without legend label so the global legend shows only primary curves
-            ax2.plot(sample_sizes[valid_points], deriv_vals, linestyle='--', color=primary_color, linewidth=1.5, alpha=0.9)
+            curve_values = curve_method(
+                data=data,
+                sample_sizes=sample_sizes,
+                method=sampling_method,
+                n_iterations=simulation_iterations,
+                **curve_kwargs,
+            )
+            curve_values_all.append(curve_values)
+            curve_values = np.asarray(curve_values, dtype=float)
+            valid_points = np.isfinite(curve_values)
+            primary_color = next(color_iterator)
+            ax.plot(sample_sizes[valid_points], curve_values[valid_points], linestyle='--', alpha=0.6,
+                    label=_curve_label(model_name), color=primary_color, linewidth=1.0)
 
-        def _fmt_value(value):
-            return '-' if not np.isfinite(value) else f"{value:.3f}"
+            if plot_derivative and np.sum(valid_points) >= 2 and ax2 is not None:
+                deriv_vals = np.gradient(curve_values[valid_points], sample_sizes[valid_points])
+                # plot derivative without legend label so the global legend shows only primary curves
+                ax2.plot(sample_sizes[valid_points], deriv_vals, linestyle='--', color=primary_color, linewidth=0.8, alpha=0.9)
 
-        row_data.append([model_name] + [_fmt_value(curve_values[idx]) for _, idx, _ in table_checkpoints])
+            def _fmt_value(value):
+                return '-' if not np.isfinite(value) else f"{value:.3f}"
 
-    avg_curve = np.mean(curve_values_all, axis=0)
-    valid_points = np.isfinite(avg_curve)
-    ax.plot(sample_sizes[valid_points], avg_curve[valid_points], label=f'Average', color='black', linewidth=3)
-    
-    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+            row_data.append([model_name] + [_fmt_value(curve_values[idx]) for _, idx, _ in table_checkpoints])
 
-    # Combine legends from both axes when derivative subplot exists and place a single legend below the figure
-    handles, labels = ax.get_legend_handles_labels()
+        avg_curve = np.mean(curve_values_all, axis=0)
+        valid_points = np.isfinite(avg_curve)
+        ax.plot(sample_sizes[valid_points], avg_curve[valid_points], label='Average', color=c_darkgrey, linewidth=1.6)
 
-    # Just orders so that long ones appear in the same column, if not both columns might be long and cover the figure
-    if labels:
-        max_short_len = 20
-        paired = list(zip(handles, labels))
-        short_pairs = [p for p in paired if len(p[1]) <= max_short_len]
-        long_pairs = [p for p in paired if len(p[1]) > max_short_len]
+        # Short labels first so that the long ones share columns
+        handles, labels = ax.get_legend_handles_labels()
+        ordered = sorted(zip(handles, labels), key=lambda pair: len(pair[1]) > 20)
+        handles, labels = [list(x) for x in zip(*ordered)] if ordered else ([], [])
 
-        ordered = short_pairs + long_pairs
+        title = title_template.format(method_label=_plot_method_label(sampling_method, simulation_iterations),
+                                      **curve_kwargs)
+        _finish_figure(fig, ax, ax2, handles, labels, title, y_label, sample_sizes, max_ncol=3)
 
-        if ordered:
-            h_all, l_all = zip(*ordered)
-            # ax.legend(list(h_all), list(l_all), loc='best', ncol=2, fontsize='small', frameon=True, framealpha=0.9, edgecolor='0.2')
-            if plot_derivative:
-                box_anchor = (0.5, -0.23)
-            else:
-                box_anchor = (0.5, -0.28)
-            fig.legend(list(h_all), list(l_all), loc='lower center', ncol=3, fontsize='small', frameon=True, framealpha=0.9, edgecolor='0.2',
-                      bbox_to_anchor=box_anchor)
-
-    ax.set_title(title_template.format(method_label=display_method_label, **curve_kwargs))
-    ax.set_ylabel(y_label)
-    # Put X label on the bottom subplot when derivative is plotted so it appears under both plots
-    if plot_derivative and ax2 is not None:
-        ax2.set_xlabel('Sample Size (N)')
-    else:
-        ax.set_xlabel('Sample Size (N)')
-
-    # Set X ticks to include first and last and a few intermediate ticks
-    try:
-        max_ticks = 8
-        n = len(sample_sizes)
-        tick_count = min(max_ticks, n)
-        indices = np.unique(np.round(np.linspace(0, n - 1, tick_count)).astype(int))
-        xticks = sample_sizes[indices]
-        ax.set_xticks(xticks)
-        if plot_derivative and ax2 is not None:
-            ax2.set_xticks(xticks)
-    except Exception:
-        pass
-
-    # Align Y labels of stacked subplots for visual consistency
-    try:
-        fig.align_ylabels([ax, ax2] if ax2 is not None else [ax])
-    except Exception:
-        # fallback: set same label coordinates
-        if ax2 is not None:
-            ax.yaxis.set_label_coords(-0.05, 0.5)
-            ax2.yaxis.set_label_coords(-0.05, 0.5)
-
-    # Apply grid to both axes (main and derivative) when present
-    ax.grid(visible=True, color=c_grey, linestyle='--', linewidth=0.5, alpha=0.7)
-    if plot_derivative and ax2 is not None:
-        ax2.grid(visible=True, color=c_grey, linestyle='--', linewidth=0.5, alpha=0.7)
-    plt.tight_layout()
-
-    extra_title = f"_{title_tag}" if title_tag else ""
-    method_suffix = sampling_method.lower()
-    filename = f"{filename_prefix}{extra_title}.pdf" if method_suffix == 'analytical' else f"{filename_prefix}_{method_suffix}{extra_title}.pdf"
-    plt.savefig(os.path.join(analysis_path, filename), format="pdf", bbox_inches='tight')
+        extra_title = f"_{title_tag}" if title_tag else ""
+        method_suffix = sampling_method.lower()
+        filename = f"{filename_prefix}{extra_title}.pdf" if method_suffix == 'analytical' else f"{filename_prefix}_{method_suffix}{extra_title}.pdf"
+        fig.savefig(os.path.join(analysis_path, filename), format="pdf", bbox_inches='tight', pad_inches=0.02)
 
     table_title = f"{metric.title()} {table_title_prefix} ({display_method_label}) {title_tag.replace('_', ' ').title()}"
     log(f"\nSummary Table of {table_title}:")
@@ -188,7 +260,7 @@ def plot_sampling_graph(metrics_data,
     logTable(row_data=row_data, output_path=f"{analysis_path}/tables", filename=table_title, colalign=colalign)
 
     if close_plot:
-        plt.close()
+        plt.close(fig)
 
 
 def plot_sampling_graph_average(metrics_data,
@@ -201,7 +273,7 @@ def plot_sampling_graph_average(metrics_data,
                         n_iterations=None,
                         curve_method=compute_sampling_error_curve,
                         percentile_range=None,
-                        title_template='Sampling curve ({method_label})',
+                        title_template='Sampling curve\n{method_label}',
                         y_label='Value',
                         filename_prefix='sampling_curve',
                         table_title_prefix='Sampling Curve',
@@ -216,130 +288,74 @@ def plot_sampling_graph_average(metrics_data,
     for model, data in metrics_data.items():
         metric_data[model] = [entry[metric] * 100 for entry in metrics_data[model].values()]
 
-    if plot_derivative:
-        # increase height so stacked subplots remain readable
-        fig, (ax, ax2) = plt.subplots(2, 1, sharex=True, figsize=(14, 16), gridspec_kw={'height_ratios': [2.8, 1.2]})
-        ax2.set_ylabel('Derivative')
-    else:
-        fig, ax = plt.subplots(figsize=(14, 11))
-        ax2 = None
+    with plt.rc_context(PAPER_RC):
+        fig, ax, ax2 = _new_figure(plot_derivative)
 
-    color_iterator = itertools.cycle(color_list)
-    method_label = get_sampling_method_label(sampling_method)
-    simulation_iterations = _resolve_simulation_iterations(sampling_method, n_iterations)
-    display_method_label = method_label if sampling_method == 'analytical' else f"{method_label} - {simulation_iterations} samples"
-    
-    idx_n1 = 0
-    idx_n5 = 4
-    idx_n10 = 9
-    idx_q25 = int(len(sample_sizes) * 0.25)
-    idx_q50 = int(len(sample_sizes) * 0.5)
-    idx_nlast = -1
+        color_iterator = itertools.cycle(color_list)
+        method_label = get_sampling_method_label(sampling_method)
+        simulation_iterations = _resolve_simulation_iterations(sampling_method, n_iterations)
+        display_method_label = method_label if sampling_method == 'analytical' else f"{method_label} - {simulation_iterations} samples"
 
-    table_checkpoints = [
-        (f'N={sample_sizes[idx_n1]}', idx_n1, sample_sizes[idx_n1]),
-        (f'N={sample_sizes[idx_n5]}', idx_n5, sample_sizes[idx_n5]),
-        (f'N={sample_sizes[idx_n10]}', idx_n10, sample_sizes[idx_n10]),
-        (f'N≈25% (N={sample_sizes[idx_q25]})', idx_q25, sample_sizes[idx_q25]),
-        (f'N≈50% (N={sample_sizes[idx_q50]})', idx_q50, sample_sizes[idx_q50]),
-        (f'N={sample_sizes[idx_nlast]}', idx_nlast, sample_sizes[idx_nlast]),
-    ]
-    table_checkpoints = sorted(table_checkpoints, key=lambda item: item[2])
+        idx_n1 = 0
+        idx_n5 = 4
+        idx_n10 = 9
+        idx_q25 = int(len(sample_sizes) * 0.25)
+        idx_q50 = int(len(sample_sizes) * 0.5)
+        idx_nlast = -1
 
-    row_data = [['Model'] + [label for label, _, _ in table_checkpoints]]
-    for percentile in range(percentile_range[0], percentile_range[1] + 1):
-        curve_values = []
-        for model_name, data in metric_data.items():
-            if plot_models and model_name not in plot_models:
-                # log(f"[plot_sampling_graph] Skipping model {model_name} as it is not in plot_models {plot_models}.")
-                continue
+        table_checkpoints = [
+            (f'N={sample_sizes[idx_n1]}', idx_n1, sample_sizes[idx_n1]),
+            (f'N={sample_sizes[idx_n5]}', idx_n5, sample_sizes[idx_n5]),
+            (f'N={sample_sizes[idx_n10]}', idx_n10, sample_sizes[idx_n10]),
+            (f'N≈25% (N={sample_sizes[idx_q25]})', idx_q25, sample_sizes[idx_q25]),
+            (f'N≈50% (N={sample_sizes[idx_q50]})', idx_q50, sample_sizes[idx_q50]),
+            (f'N={sample_sizes[idx_nlast]}', idx_nlast, sample_sizes[idx_nlast]),
+        ]
+        table_checkpoints = sorted(table_checkpoints, key=lambda item: item[2])
 
-            curve_values_i = curve_method(
-                data=data,
-                sample_sizes=sample_sizes,
-                method=sampling_method,
-                n_iterations=simulation_iterations,
-                **{'percentile': percentile}
-            )
-            curve_values.append(curve_values_i)
-        
-        curve_values = np.array(curve_values)
-        curve_values = np.mean(curve_values, axis=0)
-        valid_points = np.isfinite(curve_values)
+        row_data = [['Model'] + [label for label, _, _ in table_checkpoints]]
+        for percentile in range(percentile_range[0], percentile_range[1] + 1):
+            curve_values = []
+            for model_name, data in metric_data.items():
+                if plot_models and model_name not in plot_models:
+                    continue
 
-        primary_color = next(color_iterator)
-        ax.plot(sample_sizes[valid_points], curve_values[valid_points], label=f'Avg p{percentile}', color=primary_color, linewidth=2)
+                curve_values_i = curve_method(
+                    data=data,
+                    sample_sizes=sample_sizes,
+                    method=sampling_method,
+                    n_iterations=simulation_iterations,
+                    **{'percentile': percentile}
+                )
+                curve_values.append(curve_values_i)
 
-        if plot_derivative and np.sum(valid_points) >= 2 and ax2 is not None:
-            deriv_vals = np.gradient(curve_values[valid_points], sample_sizes[valid_points])
-            # plot derivative without legend label so the global legend shows only primary curves
-            ax2.plot(sample_sizes[valid_points], deriv_vals, linestyle='--', color=primary_color, linewidth=1.5, alpha=0.9)
+            curve_values = np.array(curve_values)
+            curve_values = np.mean(curve_values, axis=0)
+            valid_points = np.isfinite(curve_values)
 
-        def _fmt_value(value):
-            return '-' if not np.isfinite(value) else f"{value:.3f}"
+            primary_color = next(color_iterator)
+            ax.plot(sample_sizes[valid_points], curve_values[valid_points], label=f'$P_{{{percentile}}}$',
+                    color=primary_color, linewidth=1.2)
 
-        row_data.append([model_name] + [_fmt_value(curve_values[idx]) for _, idx, _ in table_checkpoints])
+            if plot_derivative and np.sum(valid_points) >= 2 and ax2 is not None:
+                deriv_vals = np.gradient(curve_values[valid_points], sample_sizes[valid_points])
+                # plot derivative without legend label so the global legend shows only primary curves
+                ax2.plot(sample_sizes[valid_points], deriv_vals, linestyle='--', color=primary_color, linewidth=0.8, alpha=0.9)
 
-    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+            def _fmt_value(value):
+                return '-' if not np.isfinite(value) else f"{value:.3f}"
 
-    # Combine legends from both axes when derivative subplot exists and place a single legend below the figure
-    handles, labels = ax.get_legend_handles_labels()
+            row_data.append([model_name] + [_fmt_value(curve_values[idx]) for _, idx, _ in table_checkpoints])
 
-    # Just orders so that long ones appear in the same column, if not both columns might be long and cover the figure
-    if labels:
-        max_short_len = 20
-        paired = list(zip(handles, labels))
-        short_pairs = [p for p in paired if len(p[1]) <= max_short_len]
-        long_pairs = [p for p in paired if len(p[1]) > max_short_len]
+        handles, labels = ax.get_legend_handles_labels()
+        title = title_template.format(method_label=_plot_method_label(sampling_method, simulation_iterations),
+                                      p_min=percentile_range[0], p_max=percentile_range[1])
+        _finish_figure(fig, ax, ax2, handles, labels, title, y_label, sample_sizes, max_ncol=7)
 
-        ordered = short_pairs + long_pairs
-
-        if ordered:
-            h_all, l_all = zip(*ordered)
-            # ax.legend(list(h_all), list(l_all), loc='best', ncol=2, fontsize='small', frameon=True, framealpha=0.9, edgecolor='0.2')
-            fig.legend(list(h_all), list(l_all), loc='center left', ncol=1, fontsize='small', frameon=True, framealpha=0.9, edgecolor='0.2',
-                      bbox_to_anchor=(1.0, 0.5))
-
-    ax.set_title(title_template.format(method_label=display_method_label, percentile=f'p∈[percentile_range]'))
-    ax.set_ylabel(y_label)
-    # Put X label on the bottom subplot when derivative is plotted so it appears under both plots
-    if plot_derivative and ax2 is not None:
-        ax2.set_xlabel('Sample Size (N)')
-    else:
-        ax.set_xlabel('Sample Size (N)')
-
-    # Set X ticks to include first and last and a few intermediate ticks
-    try:
-        max_ticks = 8
-        n = len(sample_sizes)
-        tick_count = min(max_ticks, n)
-        indices = np.unique(np.round(np.linspace(0, n - 1, tick_count)).astype(int))
-        xticks = sample_sizes[indices]
-        ax.set_xticks(xticks)
-        if plot_derivative and ax2 is not None:
-            ax2.set_xticks(xticks)
-    except Exception:
-        pass
-
-    # Align Y labels of stacked subplots for visual consistency
-    try:
-        fig.align_ylabels([ax, ax2] if ax2 is not None else [ax])
-    except Exception:
-        # fallback: set same label coordinates
-        if ax2 is not None:
-            ax.yaxis.set_label_coords(-0.05, 0.5)
-            ax2.yaxis.set_label_coords(-0.05, 0.5)
-
-    # Apply grid to both axes (main and derivative) when present
-    ax.grid(visible=True, color=c_grey, linestyle='--', linewidth=0.5, alpha=0.7)
-    if plot_derivative and ax2 is not None:
-        ax2.grid(visible=True, color=c_grey, linestyle='--', linewidth=0.5, alpha=0.7)
-    plt.tight_layout()
-
-    extra_title = f"_{title_tag}" if title_tag else ""
-    method_suffix = sampling_method.lower()
-    filename = f"{filename_prefix}{extra_title}.pdf" if method_suffix == 'analytical' else f"{filename_prefix}_{method_suffix}{extra_title}.pdf"
-    plt.savefig(os.path.join(analysis_path, filename), format="pdf", bbox_inches='tight')
+        extra_title = f"_{title_tag}" if title_tag else ""
+        method_suffix = sampling_method.lower()
+        filename = f"{filename_prefix}{extra_title}.pdf" if method_suffix == 'analytical' else f"{filename_prefix}_{method_suffix}{extra_title}.pdf"
+        fig.savefig(os.path.join(analysis_path, filename), format="pdf", bbox_inches='tight', pad_inches=0.02)
 
     table_title = f"{metric.title()} {table_title_prefix} ({display_method_label}) {title_tag.replace('_', ' ').title()}"
     log(f"\nSummary Table of {table_title}:")
@@ -347,8 +363,7 @@ def plot_sampling_graph_average(metrics_data,
     logTable(row_data=row_data, output_path=f"{analysis_path}/tables", filename=table_title, colalign=colalign)
 
     if close_plot:
-        plt.close()
-
+        plt.close(fig)
 
 
 def plot_all_sampling_errors(metrics_data,
@@ -359,8 +374,10 @@ def plot_all_sampling_errors(metrics_data,
                              color_list=color_palette_list,
                              n_iterations=None,
                              close_plot=True):
+    metric_label = _METRIC_LABEL.get(metric, metric)
     for sampling_method in ['analytical', 'bootstrap', 'montecarlo']:
         for parameter in ['mean', 'std']:
+            parameter_label = 'mean' if parameter == 'mean' else 'standard deviation'
             plot_sampling_graph(
                 metrics_data=metrics_data,
                 analysis_path=analysis_path,
@@ -372,8 +389,8 @@ def plot_all_sampling_errors(metrics_data,
                 n_iterations=n_iterations,
                 curve_method=compute_sampling_error_curve,
                 curve_kwargs={'parameter': parameter},
-                title_template='Sampling error ({method_label})',
-                y_label=f'SamplingError ({parameter} {metric})',
+                title_template=f'Sampling error of the {parameter_label}\n{{method_label}}',
+                y_label=f'Sampling error ({metric_label}, points)',
                 filename_prefix=f'sampling_error_{parameter}',
                 table_title_prefix=f'Sampling Errors ({parameter})',
                 close_plot=close_plot,
@@ -403,7 +420,7 @@ def plot_all_percentile_probabilities(metrics_data,
             n_iterations=n_iterations,
             curve_method=compute_at_least_one_exceedance_probability_curve,
             curve_kwargs={'percentile': percentile},
-            title_template='P(at least 1 > p{percentile}) ({method_label})',
+            title_template='P(at least one run > $P_{{{percentile}}}$)\n{method_label}',
             y_label='Probability',
             filename_prefix=f'sampling_probability{extra_title}_p{int(percentile)}',
             table_title_prefix=f'Sampling Probability p{percentile}',
@@ -420,7 +437,7 @@ def plot_all_percentile_probabilities_average(metrics_data,
                                               color_list=color_palette_list,
                                               n_iterations=None,
                                               close_plot=True):
-    # Custom color degradation based on the number of percentiles in the range, 
+    # Custom color degradation based on the number of percentiles in the range,
     # using the base colors (first 5 colors from color_palette_list)
     num_colors = percentile_range[1] - percentile_range[0] + 1
     base_colors = color_palette_list[0:7]
@@ -440,7 +457,7 @@ def plot_all_percentile_probabilities_average(metrics_data,
             n_iterations=n_iterations,
             curve_method=compute_at_least_one_exceedance_probability_curve,
             percentile_range=percentile_range,
-            title_template='P(at least 1 > percentile) ({method_label})',
+            title_template='Mean P(at least one run > $P_X$), X in [{p_min}, {p_max}]\n{method_label}',
             y_label='Probability',
             filename_prefix=f'sampling_probability{extra_title}_p{str(percentile_range)}',
             table_title_prefix=f'Sampling Probability p{str(percentile_range)}',

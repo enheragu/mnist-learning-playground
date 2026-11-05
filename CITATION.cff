@@ -1,0 +1,47 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "Performance variability of neural network training on MNIST and YOLO object detection: training and analysis code"
+abstract: >-
+  Training and analysis code to study how the test accuracy of a neural
+  network varies across hundreds of training runs that differ only in the
+  random seed. Eight architectures, from a single-layer perceptron to a
+  14-layer CNN, are trained on MNIST, together with a hyperparameter ablation
+  and an overfitting experiment. The analysis scripts estimate the
+  distribution of results of each model and the probability that a given
+  number of runs misranks two models (Monte Carlo and Bootstrap), together
+  with survival functions of the results and an ANOVA of the ablation grid;
+  the same analyses are applied to YOLOv8 object-detection results on COCO
+  and on the KAIST and LLVIP multispectral datasets, trained with the
+  companion repository yolo_test_utils. A cross-GPU replication study
+  re-trains six MNIST conditions with a common seed pool on several GPU
+  architectures and software stacks, and a further script builds the public
+  per-trial data deposit of the article.
+authors:
+  - family-names: Heredia-Aguado
+    given-names: Enrique
+    orcid: "https://orcid.org/0009-0001-7717-1428"
+    affiliation: "University Institute for Engineering Research, Miguel Hernández University"
+  - family-names: Rujano
+    given-names: Alejandro
+    orcid: "https://orcid.org/0009-0000-7581-2378"
+    affiliation: "National Distance Education University"
+  - family-names: Valiente
+    given-names: David
+    orcid: "https://orcid.org/0000-0002-2245-0542"
+    affiliation: "University Institute for Engineering Research, Miguel Hernández University"
+  - family-names: Gil
+    given-names: Arturo
+    orcid: "https://orcid.org/0000-0001-7811-8955"
+    affiliation: "University Institute for Engineering Research, Miguel Hernández University"
+repository-code: "https://github.com/enheragu/mnist-learning-playground"
+keywords:
+  - training variance
+  - random seeds
+  - model evaluation
+  - MNIST
+  - object detection
+  - YOLO
+  - reproducibility
+version: 1.0.0
+license: MIT

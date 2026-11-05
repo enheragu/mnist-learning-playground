@@ -18,13 +18,13 @@ class SimplePerceptron(BaseModelTrainer):
         log(f"[{self.model_name}] Initialization of model complete, get into training process.")
 
     def forward(self, x):
-        x = x.view(-1, 28 * 28)  # Aplanamos la imagen 28x28 a un vector de tamaño 784
+        x = x.view(-1, 28 * 28)  # Flatten the 28x28 image into a vector of size 784
         return self.fc1(x)
 
     def _initialize_weights(self,seed):
-        """Inicializa los pesos de manera fija."""
+        """Initializes the weights in a fixed way."""
         self.seed = seed
-        torch.manual_seed(seed)  # Asegura que la inicialización de pesos sea consistente
-        nn.init.uniform_(self.fc1.weight, a=-0.1, b=0.1)  # Ejemplo de inicialización uniforme
+        torch.manual_seed(seed)  # Ensures the weight initialization is consistent
+        nn.init.uniform_(self.fc1.weight, a=-0.1, b=0.1)  # Example of uniform initialization
         if self.fc1.bias is not None:
-            nn.init.zeros_(self.fc1.bias)  # Inicia el sesgo en 0
+            nn.init.zeros_(self.fc1.bias)  # Initializes the bias to 0

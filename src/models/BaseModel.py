@@ -48,7 +48,7 @@ class BaseModelTrainer(nn.Module):
         self.train_loss_each_epoch = []
         self.test_loss_each_epoch = []
 
-    # Entrenamiento del modelo
+    # Model training
     def train_model(self, train_loader, test_loader, num_epochs = 500):
         
         optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
@@ -68,7 +68,7 @@ class BaseModelTrainer(nn.Module):
                 epoch_train_total = 0
                 
                 for images, labels in train_loader:
-                    # Mover los datos a la GPU
+                    # Move the data to the GPU
                     images, labels = images.to(self.device), labels.to(self.device)
 
                     optimizer.zero_grad()
@@ -148,7 +148,7 @@ class BaseModelTrainer(nn.Module):
         all_labels = []
         with torch.no_grad():
             for images, labels in test_loader:
-                # Mover los datos a la GPU
+                # Move the data to the GPU
                 images, labels = images.to(self.device), labels.to(self.device)
 
                 outputs = self(images)
@@ -182,18 +182,18 @@ class BaseModelTrainer(nn.Module):
     def get_model_summary(self):
         log("\nModel information:")
 
-        # Mostrar el resumen del modelo
+        # Show the model summary
         log(self)
 
-        # Número total de parámetros (incluye pesos y sesgos)
+        # Total number of parameters (includes weights and biases)
         total_params = sum(p.numel() for p in self.parameters())
         log(f"Total parameters: {total_params}")
 
-        # Número de parámetros entrenables (aquellos que requieren gradientes)
+        # Number of trainable parameters (those that require gradients)
         trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
         log(f"Trainable parameters: {trainable_params}")
 
-        # Obtener los tamaños de cada capa
+        # Get the sizes of each layer
         log("\nLayer details:")
         for name, param in self.named_parameters():
             log(f"{name}: {param.size()}")
@@ -248,9 +248,9 @@ class BaseModelTrainer(nn.Module):
     """
         Initialize each layer of a given model
         
-        - Para capas lineales y convolucionales: inicialización uniforme.
-        - Para capas recurrentes: inicialización xavier normal.
-        - Los sesgos se inicializan en cero si existen.
+        - For linear and convolutional layers: Kaiming normal initialization (fan_out, ReLU).
+        - For recurrent layers: xavier normal initialization.
+        - Biases are initialized to zero if present.
     """
     def _initialize_weights(self, seed=42):
         self.seed = seed

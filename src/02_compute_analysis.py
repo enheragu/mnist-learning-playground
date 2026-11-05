@@ -6,8 +6,8 @@ import math
 import numpy as np
 import scipy.stats as stats
 
-from utils import output_path, ablation_data_file
-from utils import getAllModelData, getAblationModelData, getAllAndAblationModelData
+from utils import output_path, ablation_data_file, deposit_path, read_deposit, analysis_seed
+from utils import getAllModelData, getAblationModelData, getAllAndAblationModelData, getDepositAllAndAblationModelData
 from utils.log_utils import log, logTable, bcolors, c_blue, c_green, c_yellow, c_red, c_purple, c_grey, c_darkgrey, color_palette_list
 from utils.plot_distribution import plot_metric_distribution
 from utils.yaml_utils import dumpYaml
@@ -290,7 +290,10 @@ def computeEstimationError(dict_data, g_names, bootstrap_simulations=default_boo
 
 if __name__ == "__main__":
     os.makedirs(f"{analysis_path}/tables", exist_ok=True)
-    metrics_data, ablation_metrics = getAllAndAblationModelData(output_path, ablation_data_file)
+    if read_deposit:
+        metrics_data, ablation_metrics = getDepositAllAndAblationModelData(deposit_path)
+    else:
+        metrics_data, ablation_metrics = getAllAndAblationModelData(output_path, ablation_data_file)
 
     all_models = sorted(metrics_data.keys())
     
@@ -324,6 +327,7 @@ if __name__ == "__main__":
         log("Skipping percentile probability graphs computation...", bcolors.WARNING)
 
     if enable_compute_estimation_error:
+        np.random.seed(analysis_seed)
         computeEstimationError(dict_data=accuracy_data, 
                                g_names=['CNN_3L', 'CNN_4L', 'CNN_5L','CNN_14L'], 
                                bootstrap_simulations=default_bootstrap_simulations*2, 
@@ -331,12 +335,14 @@ if __name__ == "__main__":
                                n_repetitions=estimation_error_repetitions)
 
     if enable_compute_better_result_sample_size:
+        np.random.seed(analysis_seed)
         # computeBetterResultSampleSize(accuracy_data, ['SimplePerceptron'])
         # computeBetterResultSampleSize(accuracy_data, ['CNN_14L'], percentile=92)
         computeBetterResultSampleSize(accuracy_data, ['CNN_14L'], percentile=90)
         computeBetterResultSampleSizeMultiPercentiles(accuracy_data, ['CNN_14L'], percentiles=(90, 95), x_max_quantile=simulation_x_max_quantile)
 
     if enable_compute_switched_probability:
+        np.random.seed(analysis_seed)
         computeSwitchedProbability(accuracy_data, ['HiddenLayerPerceptron','DNN_6L'], analysis_path=analysis_path)
         computeSwitchedProbability(accuracy_data, ['CNN_3L', 'CNN_4L', 'CNN_5L','CNN_14L'], analysis_path=analysis_path)
 
@@ -347,6 +353,7 @@ if __name__ == "__main__":
     if enable_compute_sampling_error_graphs:
         if ablation_metrics is not None:
             # plot_all_sampling_errors(metrics_data=ablation_metrics, analysis_path=analysis_path, title_tag='ablation')
+            np.random.seed(analysis_seed)
             plot_all_sampling_errors(metrics_data=combined_models, analysis_path=analysis_path, plot_models=combined_models_list)
         # plot_all_sampling_errors(metrics_data=metrics_data, analysis_path=analysis_path, plot_models=all_models)
         # plot_all_sampling_errors(metrics_data=metrics_data, analysis_path=analysis_path, title_tag='informed_training', plot_models=['SimplePerceptron','CNN_3L', 'CNN_4L', 'CNN_5L', 'CNN_14L'], color_list=[c_green, c_yellow, c_grey, c_red, c_purple])
@@ -357,7 +364,9 @@ if __name__ == "__main__":
         probability_percentile_range = [80,100]
         if ablation_metrics is not None:
             # plot_all_percentile_probabilities(metrics_data=ablation_metrics, analysis_path=analysis_path, percentile=probability_percentile, title_tag='ablation')
+            np.random.seed(analysis_seed)
             plot_all_percentile_probabilities(metrics_data=combined_models, analysis_path=analysis_path, percentile=probability_percentile, plot_models=combined_models_list)
+            np.random.seed(analysis_seed)
             plot_all_percentile_probabilities_average(metrics_data=combined_models, analysis_path=analysis_path, percentile_range=probability_percentile_range, plot_models=combined_models_list)
         # plot_all_percentile_probabilities(metrics_data=metrics_data, analysis_path=analysis_path, percentile=probability_percentile, plot_models=all_models)
         # plot_all_percentile_probabilities(metrics_data=metrics_data, analysis_path=analysis_path, percentile=probability_percentile, title_tag='informed_training', plot_models=['SimplePerceptron','CNN_3L', 'CNN_4L', 'CNN_5L', 'CNN_14L'], color_list=[c_green, c_yellow, c_grey, c_red, c_purple])

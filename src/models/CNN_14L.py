@@ -13,7 +13,7 @@ class CNN_14L(BaseModelTrainer):
     def __init__(self, input_size, num_classes=10, learning_rate=0.001, patience=10, seed=42, output_path="", input_channels=1):
         super(CNN_14L, self).__init__(input_size=None, num_classes=num_classes, learning_rate=learning_rate, patience=patience, output_path=output_path)
         
-        # Definir las capas convolucionales
+        # Define the convolutional layers
         self.conv_layers = nn.Sequential(
             # Layer 1
             nn.Conv2d(input_channels, 64, kernel_size=3, stride=1, padding=1),

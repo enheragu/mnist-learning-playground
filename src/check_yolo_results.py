@@ -18,7 +18,8 @@ from utils.log_utils import log, logTable, bcolors, color_palette_list, print_di
 
 
 from utils.indexer import Indexer
-from utils import output_path
+from utils import output_path, deposit_path, read_deposit, analysis_seed
+from utils.deposit_data import getDepositYoloResults, getDepositYoloBestMetrics
 from utils.plot_sampling_graph import plot_all_sampling_errors, plot_all_percentile_probabilities, plot_all_percentile_probabilities_average
 from utils.yolo_overfit_utils import (
     runYoloOverfitAnalysis,
@@ -29,10 +30,18 @@ from utils.compute_switched_probability import (
     montecarlo_samples as default_montecarlo_simulations,
     bootstrap_samples as default_bootstrap_simulations,
 )
+from utils.yolo_run_validity import updateYoloRunsInventory, getValidYoloRuns
 
 analysis_path = './analysis_results/yolo_analysis'
 output_path = os.path.join(output_path, "YOLO")
 parse_mode = "incremental"
+
+# Only valid runs (see utils/yolo_run_validity.py); the inventory with the validity of every run is stored with the data
+only_valid_runs = True
+yolo_runs_inventory_file = os.path.join(output_path, 'yolo_runs_inventory.csv')
+
+# Metric names as written in the article, for titles and axis labels (file names keep the plain names)
+yolo_metric_labels = {'mAP50': r'mAP$_{50}$', 'mAP50-95': r'mAP$_{50\text{-}95}$'}
 
 store_metric_standalone_data = False
 enable_yolos_swithced_probability = False
@@ -162,19 +171,21 @@ def process_dir(args):
         raise
     return results
 
-def getYOLOVarianceData(analysis_path, output_path, test_tag=""):
+def getYOLOVarianceData(analysis_path, output_path, test_tag="", valid_runs=None):
     os.makedirs(analysis_path, exist_ok=True)
     os.makedirs(f"{analysis_path}/tables", exist_ok=True)
 
-    summary_file = os.path.join(output_path, 'summary_variance_data.yaml')
+    summary_file = os.path.join(output_path, 'summary_variance_data.yaml' if valid_runs is None else 'summary_variance_data_valid.yaml')
     if parse_mode == "cached" and os.path.exists(summary_file):
         data_combined = getMetricsLogFile(summary_file)
     else:
         data_combined = []
         tasks = []
-        
+
         with ThreadPoolExecutor(max_workers=4) as executor:
             for dirpath, dirnames, filenames in os.walk(output_path):
+                if valid_runs is not None and 'args.yaml' in filenames and os.path.normpath(dirpath) not in valid_runs:
+                    continue
                 tasks.append(executor.submit(process_dir, (dirpath, filenames, parse_mode)))
             for future in as_completed(tasks):
                 try:
@@ -184,10 +195,14 @@ def getYOLOVarianceData(analysis_path, output_path, test_tag=""):
                 except Exception as e:
                     log(f"[getYOLOVarianceData] Exception catched: {e}", bcolors.ERROR)
 
+        if not data_combined:
+            log(f"[getYOLOVarianceData] No runs to analyze for {test_tag} in {output_path}", bcolors.WARNING)
+            return {}
+
         data_combined = combine_dicts(data_combined)
         # print(f"After combination:\n{data_combined}")
         updateMetricsLogFile(data_combined, summary_file)
-    
+
     n_data = 0
     headers = ['Id', 'Class', 'mAP50 (mean)', 'mAP50 (std)', 'mAP50-95 (mean)', 'mAP50-95 (std)']
     row_data = []
@@ -232,9 +247,9 @@ def plotYOLODistribution(data_plot, analysis_path, class_tag = 'all', metric_nam
         for key, data_items in data_plot.items():
             data[key] = data_items['validation_0']['data'][class_tag][metric_name]
 
-        plot_metric_distribution(data, train_duration_data = None, metric_label = f'{metric_name.replace("_", " ")} {tag_name.replace("_", " ")}', plot_func=plot_metric_normaldistribution,
+        plot_metric_distribution(data, train_duration_data = None, metric_label = yolo_metric_labels.get(metric_name, metric_name), plot_func=plot_metric_normaldistribution,
                                 color_palette = color_palette_list, vertical_lines_acc = [], analysis_path = analysis_path,
-                                plot_filename = f'{tag_name}_{metric_name}')
+                                plot_filename = f'{tag_name}_{metric_name}', paper_size=True)
         
 def plotYOLOTrainDurationDistribution(data_plot, analysis_path, tag_name = ''):
     data_epoch = {}
@@ -249,11 +264,11 @@ def plotYOLOTrainDurationDistribution(data_plot, analysis_path, tag_name = ''):
     plot_metric_distribution(data_epoch, train_duration_data = None, metric_label = 'Best Epoch', plot_func=plot_metric_gammadistribution, 
                              color_palette=color_palette_list, vertical_lines_acc=[], analysis_path=analysis_path,
                              plot_filename = f'plot_best_epoch_{tag_name}',
-                             bin_size=30)
+                             bin_size=30, paper_size=True)
     plot_metric_distribution(data_time, train_duration_data = None, metric_label = 'Train duration (min)', plot_func=plot_metric_gammadistribution, 
                              color_palette=color_palette_list, vertical_lines_acc=[], analysis_path=analysis_path,
                              plot_filename = f'plot_time_duration_{tag_name}',
-                             bin_size=30)
+                             bin_size=30, paper_size=True)
 
 
 def yolo_to_metrics_data(yolo_results, metric='mAP50', class_tag='all'):
@@ -354,14 +369,25 @@ if __name__ == "__main__":
         (os.path.join(analysis_path,'tables'), os.path.join(output_path, 'variance_llvip_night_yoloCh4v3'), 'LLVIP_Ch4v3')
     ]
 
-    results = {}
-    with ProcessPoolExecutor(max_workers=3) as executor:
-        futures = [executor.submit(getYOLOVarianceData, *task) for task in tasks]
-        for future in as_completed(futures):
-            try:
-                results.update(future.result())
-            except Exception as e:
-                log(f"[main] Exception in future: {e}", bcolors.ERROR)
+    valid_runs = None
+    if read_deposit:
+        # The deposit holds the valid runs only
+        log(f"[main] Reading the YOLOv8 runs from the data deposit in {deposit_path}", bcolors.OKGREEN)
+        results = getDepositYoloResults(deposit_path)
+    else:
+        if only_valid_runs:
+            yolo_runs_inventory = updateYoloRunsInventory(tasks, output_path, yolo_runs_inventory_file, rescan=(parse_mode == "scratch"))
+            valid_runs = getValidYoloRuns(yolo_runs_inventory, output_path)
+
+        results = {}
+        with ProcessPoolExecutor(max_workers=3) as executor:
+            futures = [executor.submit(getYOLOVarianceData, *task, valid_runs) for task in tasks]
+            # In the order of tasks, so that the figures do not depend on which group finishes first
+            for future in futures:
+                try:
+                    results.update(future.result())
+                except Exception as e:
+                    log(f"[main] Exception in future: {e}", bcolors.ERROR)
     
     if store_metric_standalone_data:        
         for metric, class_tag in zip(['P', 'R', 'mAP50', 'mAP50-95'], ['person', 'person', 'all', 'all']):
@@ -377,11 +403,14 @@ if __name__ == "__main__":
 
 
     if enable_yolos_swithced_probability:
-        computeSwitchedProbabilityYolo(results, ['kaist_day_hsvt','kaist_day_rgbt'], metric_name='mAP50', analysis_path=analysis_path)
+        np.random.seed(analysis_seed)
+        computeSwitchedProbabilityYolo(results, ['kaist_day_hsvt','kaist_day_vths_v2'], metric_name='mAP50', analysis_path=analysis_path)
         computeSwitchedProbabilityYolo(results, ['LLVIP_VTHS_no_equalization','LLVIP_VTHS_rgb_th_equalization','LLVIP_VTHS_th_equalization','LLVIP_VTHS_rgb_equalization'], metric_name='mAP50', analysis_path=analysis_path)
         computeSwitchedProbabilityYolo(results, ['LLVIP_VT_no_equalization','LLVIP_VT_rgb_th_equalization','LLVIP_VT_th_equalization','LLVIP_VT_rgb_equalization'], metric_name="mAP50", analysis_path=analysis_path)
 
-    if enable_yolo_overfit_analysis:
+    if enable_yolo_overfit_analysis and read_deposit:
+        log("[main] The overfit analysis reads the results.csv files of the runs; skipped with the data deposit", bcolors.WARNING)
+    elif enable_yolo_overfit_analysis:
         # Empty list means: include all tags present in `tasks`.
         yolo_overfit_include_tags = ['COCO', 'LLVIP_Ch4v3', 'kaist_day_rgbt', 'kaist_day_vths_v2']
         runYoloOverfitAnalysis(
@@ -396,25 +425,31 @@ if __name__ == "__main__":
         )
 
     if enable_yolo_survival_function:
-        survival_map50, survival_map5095 = collectYoloBestMetrics(
-            variance_tasks=tasks,
-        )
+        if read_deposit:
+            survival_map50, survival_map5095 = getDepositYoloBestMetrics(deposit_path)
+        else:
+            survival_map50, survival_map5095 = collectYoloBestMetrics(
+                variance_tasks=tasks,
+                valid_runs=valid_runs,
+            )
         if survival_map50:
             plot_survival_function(
                 metrics_data=survival_map50,
                 analysis_path=distributions_path,
-                metric_label='mAP50',
+                metric_label=yolo_metric_labels['mAP50'],
                 table_filename='Survival Function mAP50',
                 plot_prefix='survival_mAP50',
+                paper_size=True,
             )
             log("Survival function plot saved for mAP50", bcolors.OKGREEN)
         if survival_map5095:
             plot_survival_function(
                 metrics_data=survival_map5095,
                 analysis_path=distributions_path,
-                metric_label='mAP50-95',
+                metric_label=yolo_metric_labels['mAP50-95'],
                 table_filename='Survival Function mAP50-95',
                 plot_prefix='survival_mAP50-95',
+                paper_size=True,
             )
             log("Survival function plot saved for mAP50-95", bcolors.OKGREEN)
 
@@ -443,6 +478,11 @@ if __name__ == "__main__":
         plotYOLODistribution(data_plot_vt, distributions_path, metric_name = 'mAP50', tag_name = 'LLVIP_VT_equalization')
         plotYOLODistribution(data_plot_vt, distributions_path, metric_name = 'mAP50-95', tag_name = 'LLVIP_VT_equalization')
 
+        # Fusion methods compared with the same equalization (overlapping distributions)
+        data_plot_fusion = {key: results[key] for key in ['LLVIP_VT_no_equalization', 'LLVIP_VTHS_no_equalization']}
+        plotYOLODistribution(data_plot_fusion, distributions_path, metric_name = 'mAP50', tag_name = 'LLVIP_fusion_no_equalization')
+        plotYOLODistribution(data_plot_fusion, distributions_path, metric_name = 'mAP50-95', tag_name = 'LLVIP_fusion_no_equalization')
+
         ablation_equalization = data_plot_vths.copy()
         ablation_equalization.update(data_plot_vt)
         plotYOLODistribution(ablation_equalization, distributions_path, metric_name = 'mAP50', tag_name = 'LLVIP_equalization_ablation')
@@ -450,26 +490,19 @@ if __name__ == "__main__":
 
         data_plot_day = {}
         for key in ['kaist_day_rgbt', 'kaist_day_vths_v2', 'kaist_day_hsvt']:
-            data_plot_day[key] = results[key]
+            if key in results:
+                data_plot_day[key] = results[key]
 
         plotYOLODistribution(data_plot_day, distributions_path, metric_name = 'mAP50', tag_name = 'KAIST_day')
         plotYOLODistribution(data_plot_day, distributions_path, metric_name = 'mAP50-95', tag_name = 'KAIST_day')
 
-        plotYOLODistribution({'kaist_day_rgbt': results['kaist_day_rgbt']}, distributions_path, metric_name = 'mAP50', tag_name = 'kaist_day_rgbt')
-        plotYOLODistribution({'kaist_day_rgbt': results['kaist_day_rgbt']}, distributions_path, metric_name = 'mAP50-95', tag_name = 'kaist_day_rgbt')
-        # plotYOLOTrainDurationDistribution({'kaist_day_rgbt': results['kaist_day_rgbt']}, analysis_path, tag_name = 'kaist_day_rgbt')
-
-        # plotYOLODistribution({'kaist_day_vths_v2': results['kaist_day_vths_v2']}, analysis_path, metric_name = 'mAP50', tag_name = 'kaist_day_vths_v2')
-        # plotYOLODistribution({'kaist_day_vths_v2': results['kaist_day_vths_v2']}, analysis_path, metric_name = 'mAP50-95', tag_name = 'kaist_day_vths_v2')
-        # plotYOLOTrainDurationDistribution({'kaist_day_vths_v2': results['kaist_day_vths_v2']}, analysis_path, tag_name = 'kaist_day_vths_v2')
-
-        # plotYOLODistribution({'kaist_day_hsvt': results['kaist_day_hsvt']}, analysis_path, metric_name = 'mAP50', tag_name = 'kaist_day_hsvt')
-        # plotYOLODistribution({'kaist_day_hsvt': results['kaist_day_hsvt']}, analysis_path, metric_name = 'mAP50-95', tag_name = 'kaist_day_hsvt')
-        # plotYOLOTrainDurationDistribution({'kaist_day_hsvt': results['kaist_day_hsvt']}, analysis_path, tag_name = 'kaist_day_hsvt')
-
-        plotYOLODistribution({'LLVIP_lwir': results['LLVIP_lwir']}, distributions_path, metric_name = 'mAP50', tag_name = 'LLVIP_lwir')
-        plotYOLODistribution({'LLVIP_lwir': results['LLVIP_lwir']}, distributions_path, metric_name = 'mAP50-95', tag_name = 'LLVIP_lwir')
-        plotYOLOTrainDurationDistribution({'LLVIP_lwir': results['LLVIP_lwir']}, distributions_path, tag_name = 'LLVIP_lwir')
+        # Single-group distributions and best epoch (introduction figure)
+        for key in ['kaist_day_rgbt', 'kaist_day_vths_v2', 'kaist_day_hsvt', 'LLVIP_lwir']:
+            if key not in results:
+                continue
+            plotYOLODistribution({key: results[key]}, distributions_path, metric_name = 'mAP50', tag_name = key)
+            plotYOLODistribution({key: results[key]}, distributions_path, metric_name = 'mAP50-95', tag_name = key)
+            plotYOLOTrainDurationDistribution({key: results[key]}, distributions_path, tag_name = key)
 
         if 'LLVIP_Ch4v3' in results:
             plotYOLODistribution({'LLVIP_Ch4v3': results['LLVIP_Ch4v3']}, distributions_path, metric_name = 'mAP50', tag_name = 'LLVIP_Ch4v3')
@@ -477,7 +510,9 @@ if __name__ == "__main__":
             plotYOLOTrainDurationDistribution({'LLVIP_Ch4v3': results['LLVIP_Ch4v3']}, distributions_path, tag_name = 'LLVIP_Ch4v3')
 
     if enable_yolo_sampling_plots:
+        np.random.seed(analysis_seed)
         plot_sampling_from_yolo(results, analysis_path=sampling_path, metric='mAP50', percentile=90)
+        np.random.seed(analysis_seed)
         plot_sampling_from_yolo(results, analysis_path=sampling_path, metric='mAP50-95', percentile=90)
 
 

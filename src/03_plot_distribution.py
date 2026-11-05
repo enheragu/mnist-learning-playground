@@ -8,9 +8,10 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 from utils.log_utils import log, c_blue, c_green, c_yellow, c_red, c_purple, c_grey, c_darkgrey, color_palette_list
-from utils import getAllModelData, getAblationModelData, getAllAndAblationModelData
+from utils import getAllModelData, getAblationModelData, getAllAndAblationModelData, getDepositAllAndAblationModelData
 from utils.plot_distribution import plotDataDistribution, only_store, plot_metric_distribution, plot_survival_function
-from utils import output_path, ablation_data_file
+from utils.plot_distribution import PAPER_FIG_SIZE_IN, PAPER_RC, display_name
+from utils import output_path, ablation_data_file, deposit_path, read_deposit, analysis_seed
 from utils.distribution_analysis import normalityTest, maxAmplitude, count_trials, gamma_amplitude
 
 analysis_path = './analysis_results/distributions'
@@ -75,87 +76,51 @@ def plotParamAmplitudeRelation(metrics_data, plot_models = 'all', title_tag=''):
         y.append(amplitude)
         labels.append(model_name)
 
-    plt.figure(figsize=(12, 8))
-    plt.scatter(x, y, zorder=3)
+    # Drawn at its printed size in the article
+    with plt.rc_context(PAPER_RC):
+        plt.figure(figsize=PAPER_FIG_SIZE_IN)
+        plt.scatter(x, y, s=12, zorder=3, color=c_blue)   # palette blue (no matplotlib default)
 
-    # Posicionar etiquetas dinámicamente para evitar solapamientos en X e Y
-    x_range = np.max(x) - np.min(x)
-    x_middle = x_range / 2 + np.min(x)
-    y_range = np.max(y) - np.min(y)
-    proximity_threshold = y_range * 0.02  # Umbral: 2% del rango Y
-    
-    # Crear índices ordenados por Y para detectar puntos cercanos
-    y_indices = np.argsort(y)
-    
-    # Determinar lado para cada punto considerando proximidad a otros
-    sides = {}  # Mapeo de índice a 'left' o 'right'
-    for i in range(len(labels)):
-        idx = y_indices[i]
-        
-        # Determinar lado inicial basado en X
-        if x[idx] < x_middle:
-            initial_side = 'left'
-        else:
-            initial_side = 'right'
-        
-        # Verificar si hay puntos muy cercanos en Y
-        nearby_indices = [j for j in range(len(labels)) if abs(y[j] - y[idx]) < proximity_threshold and j != idx]
-        
-        if nearby_indices:
-            # Si hay puntos cercanos, alternar lado para uno de ellos
-            nearby_sides = [sides.get(j, 'unknown') for j in nearby_indices if j in sides]
-            if 'left' in nearby_sides:
-                # Si alguno va a izquierda, este va a derecha
-                sides[idx] = 'right'
-            elif 'right' in nearby_sides:
-                # Si alguno va a derecha, este va a izquierda
-                sides[idx] = 'left'
-            else:
-                # Ambos nuevos: asignar al lado opuesto del primero
-                sides[idx] = 'right' if initial_side == 'left' else 'left'
-        else:
-            sides[idx] = initial_side
-    
-    # Dibujar etiquetas con los lados determinados
-    # Usar offsets en puntos (independientes de la escala de datos) con annotate
-    ax = plt.gca()
-    for i, label in enumerate(labels):
-        ha = sides[i]
-        # Detectar si es nombre de ablation (tiene _B y _L)
-        is_ablation = ('_B' in label and '_L' in label)
+        plt.title(r'Accuracy amplitude $\mathit{vs}.$ Trainable Params')
+        plt.ylabel('Accuracy amplitude')
+        plt.xlabel('Trainable params (N)')
 
-        # Offset en puntos (px). Cortos cerca, ablation más lejos.
-        base_dx = 10 if is_ablation else 7
-        dx = base_dx if ha == 'left' else -base_dx
+        # Show the plot with the grid behind
+        plt.grid(True, zorder=0)
+        plt.tight_layout()
 
-        # Si hay puntos muy cercanos en Y, desplazar también en Y en puntos para evitar solapamiento
-        # Contar cuántos puntos están cerca en Y por encima del umbral
-        nearby_count = sum(1 for j in range(len(labels)) if j != i and abs(y[j] - y[i]) < proximity_threshold)
-        # Alternar desplazamiento vertical según índice para separar visualmente
-        if nearby_count > 0:
-            # small vertical offset per nearby point
-            dy = (i % 2) * 6  # 0 or 6 points
-        else:
-            dy = 0
-
-        ax.annotate(
-            label,
-            xy=(x[i], y[i]),
-            xytext=(dx, dy),
-            textcoords='offset points',
-            fontsize=9,
-            ha=ha,
-            va='center',
-            zorder=4,
-        )
-
-    plt.title(r'Accuracy amplitude $\mathit{vs}.$ Trainable Params')
-    plt.ylabel('Accuracy amplitude')
-    plt.xlabel('Trainable params (N)')
-
-    # Mostrar la gráfica con grid atrás
-    plt.grid(True, zorder=0)
-    plt.savefig(os.path.join(analysis_path,f"amplitude_relation_{title_tag}.pdf"), format="pdf")
+        # Labels to the right of the points on the left half and to the left of them on the right half, spread
+        # vertically so that they keep at least min_gap points between them (with a leader line when moved)
+        ax, fig = plt.gca(), plt.gcf()
+        min_gap = 7.5
+        x_middle = (np.max(x) + np.min(x)) / 2
+        to_points = lambda value: ax.transData.transform((0, value))[1] * 72 / fig.dpi
+        for side in ('left', 'right'):
+            group = sorted([i for i in range(len(labels)) if (x[i] <= x_middle) == (side == 'left')], key=lambda i: y[i])
+            if not group:
+                continue
+            points = [to_points(y[i]) for i in group]
+            placed = []
+            for point in points:
+                placed.append(point if not placed else max(point, placed[-1] + min_gap))
+            # Centred on the points, but kept inside the axes
+            bottom, top = to_points(ax.get_ylim()[0]) + 3, to_points(ax.get_ylim()[1]) - 3
+            shift = (sum(placed) - sum(points)) / len(points)
+            shift = max(placed[-1] - top, min(shift, placed[0] - bottom))
+            for i, point, label_pos in zip(group, points, placed):
+                dy = label_pos - shift - point
+                ax.annotate(
+                    display_name(labels[i]),
+                    xy=(x[i], y[i]),
+                    xytext=(5 if side == 'left' else -5, dy),
+                    textcoords='offset points',
+                    fontsize=6,
+                    ha=side,
+                    va='center',
+                    zorder=4,
+                    arrowprops=dict(arrowstyle='-', color=c_grey, linewidth=0.4) if abs(dy) > 2 else None,
+                )
+        plt.savefig(os.path.join(analysis_path,f"amplitude_relation_{title_tag}.pdf"), format="pdf")
 
     if only_store:
         plt.close()
@@ -257,19 +222,19 @@ def plot_example_distributions(metrics_data, new_sample_size=50, analysis_path=a
     data_right_bias = data[data < (mean + std*0.5)]
     resampled_right_bias = biased_resample(data_right_bias, target_mean=mean, target_std=std, subset_size=new_sample_size)
     log(f"[plot_example_distributions] Resampled data mean: {np.mean(resampled_right_bias):.2f}, std: {np.std(resampled_right_bias):.2f}. Max: {np.max(data_right_bias):.2f}, Min: {np.min(data_right_bias):.2f}, N: {len(data_right_bias)}")
-    plot_metric_distribution({model: resampled_right_bias}, metric_label='Accuracy (%)', color_palette=[c_red], vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path, plot_filename="example_CNN_14L_right_biased", plot_mean=mean, plot_std=std)
+    plot_metric_distribution({model: resampled_right_bias}, metric_label='Accuracy (%)', color_palette=[c_red], vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path, plot_filename="example_CNN_14L_right_biased", plot_mean=mean, plot_std=std, paper_size=True)
     log(f"[plot_example_distributions] Plot resampled distribution with right bias")
 
     data_centered_bias = data[(data < (mean + std*1.4)) & (data > (mean - std*1.4))]
     resampled_centered_bias = biased_resample(data_centered_bias, target_mean=mean, target_std=std, subset_size=new_sample_size, alpha_std=1.0)
     log(f"[plot_example_distributions] Resampled data mean: {np.mean(resampled_centered_bias):.2f}, std: {np.std(resampled_centered_bias):.2f}. Max: {np.max(data_centered_bias):.2f}, Min: {np.min(data_centered_bias):.2f}, N: {len(data_centered_bias)}")
-    plot_metric_distribution({model: resampled_centered_bias}, metric_label='Accuracy (%)', color_palette=[c_yellow], analysis_path=analysis_path, plot_filename="example_CNN_14L_center_biased", plot_mean=mean, plot_std=std)
+    plot_metric_distribution({model: resampled_centered_bias}, metric_label='Accuracy (%)', color_palette=[c_yellow], analysis_path=analysis_path, plot_filename="example_CNN_14L_center_biased", plot_mean=mean, plot_std=std, paper_size=True)
     log(f"[plot_example_distributions] Plot resampled distribution with centered bias")
     
     data_left_bias = data[data > (mean - std*0.5)]
     resampled_left_bias = biased_resample(data_left_bias, target_mean=mean, target_std=std, subset_size=new_sample_size)
     log(f"[plot_example_distributions] Resampled data mean: {np.mean(resampled_left_bias):.2f}, std: {np.std(resampled_left_bias):.2f}. Max: {np.max(data_left_bias):.2f}, Min: {np.min(data_left_bias):.2f}, N: {len(data_left_bias)}")
-    plot_metric_distribution({model: resampled_left_bias}, metric_label='Accuracy (%)', color_palette=[c_green], analysis_path=analysis_path, plot_filename="example_CNN_14L_left_biased", plot_mean=mean, plot_std=std)
+    plot_metric_distribution({model: resampled_left_bias}, metric_label='Accuracy (%)', color_palette=[c_green], analysis_path=analysis_path, plot_filename="example_CNN_14L_left_biased", plot_mean=mean, plot_std=std, paper_size=True)
     log(f"[plot_example_distributions] Plot resampled distribution with left bias")
     
 
@@ -277,7 +242,10 @@ if __name__ == "__main__":
     os.makedirs(f"{analysis_path}/tables", exist_ok=True)
     os.makedirs(os.path.join(analysis_path, 'single_model'), exist_ok=True)
     plt.rcParams.update({'font.size': 18})
-    metrics_data, ablation_metrics = getAllAndAblationModelData(output_path, ablation_data_file)
+    if read_deposit:
+        metrics_data, ablation_metrics = getDepositAllAndAblationModelData(deposit_path)
+    else:
+        metrics_data, ablation_metrics = getAllAndAblationModelData(output_path, ablation_data_file)
 
     all_models = metrics_data.keys()
     ablatipon_models = ablation_metrics.keys()
@@ -293,13 +261,15 @@ if __name__ == "__main__":
             plotDataDistribution(metrics_data=ablation_metrics,
                                 models_plot_list=[ablatipon_models],
                                 color_list=[color_palette_list],
-                                analysis_path=analysis_path)
+                                analysis_path=analysis_path,
+                                paper_size=True)
             plotDataDistribution(metrics_data=ablation_metrics,
                                 models_plot_list=[ablatipon_models],
                                 color_list=[color_palette_list],
                                 analysis_path=analysis_path,
                                 show_histogram=False,
-                                plot_filename='plot_accuracy_ablation')
+                                plot_filename='plot_accuracy_ablation',
+                                paper_size=True)
         if COMPUTE_ANALYSIS_METRICS:
             normalityTest(metrics_data=ablation_metrics, title_tag='ablation', analysis_path=analysis_path)
             maxAmplitude(metrics_data=ablation_metrics, title_tag='ablation', analysis_path=analysis_path)
@@ -352,7 +322,8 @@ if __name__ == "__main__":
                                 [c_darkgrey],
                                 #    color_palette_list],
                                 ],
-                                analysis_path = analysis_path)
+                                analysis_path = analysis_path,
+                                paper_size=True)
         
         if COMPUTE_ANALYSIS_METRICS:
             normalityTest(metrics_data=metrics_data, analysis_path=analysis_path)
@@ -365,9 +336,9 @@ if __name__ == "__main__":
 
 
         if PLOT_EXAMPLE_DISTRIBUTIONS:
+            np.random.seed(analysis_seed)
             plot_example_distributions(metrics_data=metrics_data, new_sample_size=60, analysis_path=analysis_path)
 
-        print(f"Search Juyang (John) Weng for info about initialization bias and similar stuff https://www.google.com/search?client=ubuntu&channel=fs&q=Juyang+%28John%29+Weng")
 
     
 
@@ -388,6 +359,7 @@ if __name__ == "__main__":
                 table_filename='Survival Function Key Percentiles Combined Models',
                 plot_prefix='survival_combined',
                 legend_ncol=2,
+                paper_size=True,
             )
             log("Survival function plot generated", c_green)
         else:

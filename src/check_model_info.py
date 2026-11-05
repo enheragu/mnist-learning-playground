@@ -63,7 +63,7 @@ def generate_mermaid_diagram(model, input_size):
         while i + count < len(layers) and layers[i + count][1] == current_description:
             count += 1
         if count > 1:
-            # Crear un subgraph para capas repetidas
+            # Create a subgraph for repeated layers
             subgraph_name = f"subgraph_{i}"
             grouped_layers.append((subgraph_name, current_description, modifier, count))
             i += count
@@ -76,7 +76,7 @@ def generate_mermaid_diagram(model, input_size):
     
     for layer in grouped_layers:
         if isinstance(layer, tuple):
-            # Subgraph para capas repetidas
+            # Subgraph for repeated layers
             subgraph_name, description, modifier, count = layer
             diagram += f'    subgraph {subgraph_name} [" "]\n'
             diagram += f'        {subgraph_name}_count("<b>x{count}</b>"):::noBox\n'
@@ -85,7 +85,7 @@ def generate_mermaid_diagram(model, input_size):
             diagram += f'    style {subgraph_name} fill:{c_alpha_purple},stroke:{c_purple},stroke-width:2px,rx:10px,ry:10px\n'
     
         else:
-            # Nodo individual
+            # Single node
             diagram += f'    {layer[0]}("{layer[1]}"){layer[2]}\n'
             
     diagram += "\n\n"
@@ -133,7 +133,7 @@ if __name__ == "__main__":
     for Model in [SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L, BatchNormMaxoutNetInNet]:
         model = Model(input_size=input_size, num_classes=10, output_path=output_path)
         log(f"Summary of {model.model_name} model with input size {input_size} for 10 classes classification:", color=bcolors.OKCYAN)
-        # summary(model, input_size=(1, 28, 28))  # Tamaño de entrada: (canales, alto, ancho)
+        # summary(model, input_size=(1, 28, 28))  # Input size: (channels, height, width)
         layers, total_params, trainable_params, mem_mb = model_brief(model, False)
         table_data.append([model.model_name, f"{layers}", f"{total_params}", f"{trainable_params}", f"{mem_mb:7.1f}"])
         diagram = generate_mermaid_diagram(model, (1, 28, 28))

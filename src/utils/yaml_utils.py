@@ -39,6 +39,8 @@ def dict_merge(dct, merge_dct):
 def updateMetricsLogFile(metrics, file_path="training_metrics.yaml"):
     lock_file = f"{file_path}.lock"
 
+    # Read and write under the same lock: with one lock for each, a process writing in between loses its trials
+    # when this one overwrites the file
     with FileLock(lock_file) as lock1:
         if os.path.exists(file_path):
             with open(file_path, "r") as file:
@@ -49,7 +51,6 @@ def updateMetricsLogFile(metrics, file_path="training_metrics.yaml"):
         all_metrics = dict_merge(all_metrics, metrics)
         # all_metrics.update(metrics)
 
-    with FileLock(lock_file) as lock1:
         with open(file_path, "w") as file:
             # Add custom representation functions to the YAML dumper
             yaml.add_representer(list, represent_list)
