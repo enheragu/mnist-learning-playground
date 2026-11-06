@@ -45,3 +45,11 @@ keywords:
   - reproducibility
 version: 1.0.1
 license: MIT
+doi: 10.5281/zenodo.24003004
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.24003004
+    description: "Concept DOI: all versions, resolves to the latest release"
+  - type: doi
+    value: 10.5281/zenodo.24003005
+    description: "Version 1.0.1"

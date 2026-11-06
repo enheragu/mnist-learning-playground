@@ -1,5 +1,7 @@
 # Performance variability of neural network training on MNIST and YOLO object detection
 
+<p align="center"><a href="https://doi.org/10.5281/zenodo.24003004"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.24003004.svg" alt="DOI 10.5281/zenodo.24003004" /></a></p>
+
 Train the same network twice with different random seeds and you get two different results. This repository measures
 how large that variability is and what it means when you compare models.
 
@@ -170,7 +172,9 @@ To rebuild the deposit from your own outputs, run `python src/08_export_zenodo.p
 ## 📝 How to cite
 
 If you use this software, please cite it: the metadata are in [`CITATION.cff`](CITATION.cff), and GitHub's *Cite this
-repository* button exports them as APA or BibTeX. When reporting results, please also cite the article above.
+repository* button exports them as APA or BibTeX. The DOI [10.5281/zenodo.24003004](https://doi.org/10.5281/zenodo.24003004) always resolves to the
+latest release; each release also has its own DOI (v1.0.1: [10.5281/zenodo.24003005](https://doi.org/10.5281/zenodo.24003005)), which is the one to cite when
+reporting results obtained with that version. When reporting results, please also cite the article above.
 
 ## ⚖️ License
 
