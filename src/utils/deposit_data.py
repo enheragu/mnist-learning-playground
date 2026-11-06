@@ -9,10 +9,6 @@
 
 import os
 import csv
-import gzip
-import json
-
-import numpy as np
 
 
 def _readRows(deposit_path, filename):
@@ -92,16 +88,12 @@ def getDepositYoloResults(deposit_path):
 
 
 """
-    Best (maximum over epochs) mAP50 and mAP50-95 of each valid YOLOv8 run from its validation curve, as
-    collectYoloBestMetrics() takes them from the results.csv files: two dicts {group: [one value per run]}.
+    mAP50 and mAP50-95 of the final evaluation of each valid YOLOv8 run, the values of the tables (see
+    getDepositYoloResults() and collectYoloFinalMetrics()): two dicts {group: [one value per run]}.
 """
-def getDepositYoloBestMetrics(deposit_path):
-    group_of_run = {int(run['run_id']): run['group'] for run in _readRows(deposit_path, "yolo_runs.csv")}
-    best_map50, best_map5095 = {}, {}
-    with gzip.open(os.path.join(deposit_path, "yolo_curves.jsonl.gz"), "rt") as f:
-        for line in f:
-            curve = json.loads(line)
-            group = group_of_run[curve['run_id']]
-            best_map50.setdefault(group, []).append(float(np.nanmax(curve['mAP50'])))
-            best_map5095.setdefault(group, []).append(float(np.nanmax(curve['mAP50_95'])))
-    return best_map50, best_map5095
+def getDepositYoloFinalMetrics(deposit_path):
+    final_map50, final_map5095 = {}, {}
+    for run in _readRows(deposit_path, "yolo_runs.csv"):
+        final_map50.setdefault(run['group'], []).append(float(run['mAP50']))
+        final_map5095.setdefault(run['group'], []).append(float(run['mAP50_95']))
+    return final_map50, final_map5095

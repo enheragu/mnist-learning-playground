@@ -138,7 +138,10 @@ if expected.get("dataset_fingerprint") and got_d != expected["dataset_fingerprin
 if bad:
     sys.exit(f"ERROR: {' and '.join(bad)} do not match the reference. "
              "The results would not be comparable with the rest of the study.")
-print("  -> they match the control machine")
+if expected.get("training_fingerprint") and expected.get("dataset_fingerprint"):
+    print("  -> they match the control machine")
+else:
+    print("  -> not checked: FINGERPRINTS.txt is absent or incomplete")
 
 # --------------------------------------------------------------- 3. environment
 section("3. Assigned GPU")

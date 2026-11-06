@@ -120,9 +120,9 @@ for fname, f in probe_files.items():
 if len(data) == 2:
     a, b = data["cu128"], data["cu118"]
     for k in ("torch", "cuda_build", "cudnn", "driver", "gpu_name"):
-        print(f"  {k:12} cu128={a.get('env',a).get(k,'?')}   cu118={b.get('env',b).get(k,'?')}")
-    ra = a.get("results", a)
-    rb = b.get("results", b)
+        print(f"  {k:12} cu128={a['environment'].get(k,'?')}   cu118={b['environment'].get(k,'?')}")
+    ra = a["ops"]
+    rb = b["ops"]
     ops = sorted(set(ra) & set(rb))
     print(f"\n  {'operator':26}{'type':8}{'forward':>10}{'grad':>10}")
     print("  " + "-" * 56)

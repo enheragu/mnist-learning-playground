@@ -562,7 +562,7 @@ logged for it.
 | `trial_id` | Integer identifier, also the key of the curve file |
 | `experiment` | See above |
 | `model` | Architecture, as named in the code and in the article |
-| `condition` | Model or ablation cell as labelled in the article figures, e.g. `CNN_14L_B10_L0.001` |
+| `condition` | Model or ablation cell as named in the analysis code, e.g. `CNN_14L_B10_L0.001`; the article figures show it as BS 10, LR 0.001 |
 | `batch_size`, `learning_rate` | Training hyperparameters of the trial |
 | `iteration` | `ablation` only: iteration index; the trials with the same `iteration` share `seed`. The per-seed comparisons of the article use the iterations with all nine trials |
 | `seed` | Random 32-bit seed of the trial, which drives the weight initialization (and the data order in `main` and `batch_size`); empty where it was not logged. In `ablation` it is the seed of the iteration |
@@ -584,8 +584,8 @@ and VT are those of Heredia-Aguado et al., Remote Sensing 17(6), 1060,
 (CLAHE) applied to the visible and thermal images, and the training
 settings read from the arguments of the runs (when a setting differs
 between runs, each value is given with its number of runs). `group` is the
-name used in the analysis code and in the sampling figures of the article,
-`label` the one used in the distribution and survival figures.
+name used in the analysis code, and `label` the one used in the figures of
+the article.
 
 {group_table}
 
@@ -604,7 +604,7 @@ and ablation figures, and their per-epoch curve the survival plots.
 | `cache` | Image cache of the trainer, read from the arguments of the run |
 | `best_epoch`, `last_epoch` | 0-based epoch of the selected weights and of the last epoch run |
 | `train_duration_h` | Wall-clock training time in hours |
-| `mAP50`, `mAP50_95` | Final evaluation, all classes |
+| `mAP50`, `mAP50_95` | Final evaluation, all classes (in all these runs equal to the values of class `person`) |
 | `P_person`, `R_person`, `mAP50_person`, `mAP50_95_person` | Final evaluation, class `person` |
 
 The final-evaluation metrics are those stored by the training code at the
@@ -655,7 +655,8 @@ kept once.
 | `cell` | See `gpu_cells.csv` (`gpu`, compute `capability`, `sm_count` and `torch` build of each cell) |
 | `model` | Architecture, as named in `mnist_trials.csv` |
 | `seed_index`, `seed` | Position of the seed in the pool of the model, and the seed |
-| `accuracy`, `test_loss_final` | Test accuracy (fraction) and test loss of the selected epoch |
+| `accuracy` | Test accuracy (fraction) of the selected epoch |
+| `test_loss_final` | Test loss of the last epoch that was run, not of the selected one |
 | `best_epoch`, `total_epochs` | As in `mnist_trials.csv` |
 | `train_duration_s` | Wall-clock training time in seconds; depends on the load of the machine |
 | `init_weights_sha256`, `final_weights_sha256` | First 16 hexadecimal digits of the SHA-256 of the initial and final weights; equal values mean bit-identical weights |
@@ -665,13 +666,14 @@ each epoch, `test_accuracy`, `train_accuracy`, `train_loss` and `test_loss`.
 
 ## Reproducing
 
-The MNIST experiments are produced by `00_train_models.py` (`main`,
-`batch_size`) and `01_train_ablation_test.py` (`ablation`) of the code
-repository, and analysed by `02_compute_analysis.py`,
-`03_plot_distribution.py` and `05_check_ablation_test.py`. The YOLOv8 runs
-are analysed by `check_yolo_results.py`. The cross-GPU study is produced by
-`scripts/gpu_check/run_study.py` and analysed by
-`scripts/gpu_check/analyze_cells.py`.
+Put these files in `zenodo_export/` at the root of the code repository.
+`scripts/article/README.md` in that repository maps every table and figure
+of the article to the script that produces it from them, including
+`scripts/article/cross_machine.py` for the cross-GPU study.
+
+The MNIST experiments were produced by `src/00_train_models.py` (`main`,
+`batch_size`) and `src/01_train_ablation_test.py` (`ablation`), and the
+cross-GPU study by `scripts/gpu_check/run_study.py`.
 
 ## Licence and attribution
 
@@ -755,10 +757,8 @@ def checkOutput(out_dir, private_terms=()):
     placeholders = []
     for dirpath, _, files in os.walk(out_dir):
         for fn in files:
-            if fn.endswith(".gz"):
-                continue
             path = os.path.join(dirpath, fn)
-            with open(path) as f:
+            with (gzip.open(path, "rt") if fn.endswith(".gz") else open(path)) as f:
                 for i, line in enumerate(f, 1):
                     m = forbidden.search(line)
                     if m:
@@ -769,6 +769,15 @@ def checkOutput(out_dir, private_terms=()):
     log("  output check passed", color=bcolors.OKGREEN)
     for t in placeholders:
         log(f"  [WARN] placeholder to fill before upload: {t}", color=bcolors.WARNING)
+
+
+def removeGzipTimestamps(out_dir):
+    """gzip stores the time of the export in its header: without it, two exports of the same data are byte-identical."""
+    for path in glob.glob(os.path.join(out_dir, "*.gz")):
+        with gzip.open(path, "rb") as f:
+            content = f.read()
+        with open(path, "wb") as f:
+            f.write(gzip.compress(content, mtime=0))
 
 
 def main():
@@ -783,6 +792,9 @@ def main():
             else f"{CODE_URL} [TODO: archived release DOI]")
     out_dir = os.path.abspath(args.out)
     if os.path.exists(out_dir):
+        # Only a previous export is replaced: --out may point to any folder
+        if os.listdir(out_dir) and not os.path.exists(os.path.join(out_dir, "mnist_trials.csv")):
+            raise SystemExit(f"{out_dir} is not empty and is not a previous export: choose another --out")
         shutil.rmtree(out_dir)
     os.makedirs(out_dir)
 
@@ -803,6 +815,7 @@ def main():
                 {"mnist": n_mnist, "mnist_curves": n_mnist_curves,
                  "yolo": n_yolo, "yolo_curves": n_yolo_curves, "gpu": n_gpu}, gpu_cells,
                 args.article, code)
+    removeGzipTimestamps(out_dir)
     log("Checking the output")
     checkOutput(out_dir, stats["gpu_private_terms"])
     log(f"Done: {out_dir}", color=bcolors.OKGREEN)

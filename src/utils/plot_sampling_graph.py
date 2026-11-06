@@ -32,6 +32,8 @@ _PLOT_METHOD_LABEL = {'analytical': 'Analytical formula', 'bootstrap': 'Bootstra
 _METRIC_LABEL = {'accuracy': 'accuracy', 'mAP50': 'mAP$_{50}$', 'mAP50-95': 'mAP$_{50-95}$', 'P': 'precision',
                  'R': 'recall'}
 _MNIST_LABEL = {'SimplePerceptron': 'Simple Perceptron', 'HiddenLayerPerceptron': 'Hidden Layer Perceptron'}
+# Line style of the curves, one per pass over the colors: once the list wraps, it tells apart the curves that share a color
+_WRAP_LINESTYLES = ['--', ':', '-.']
 
 
 def _resolve_simulation_iterations(sampling_method, n_iterations):
@@ -184,6 +186,7 @@ def plot_sampling_graph(metrics_data,
     with plt.rc_context(PAPER_RC):
         fig, ax, ax2 = _new_figure(plot_derivative)
 
+        color_list = list(color_list)
         color_iterator = itertools.cycle(color_list)
         method_label = get_sampling_method_label(sampling_method)
         simulation_iterations = _resolve_simulation_iterations(sampling_method, n_iterations)
@@ -208,6 +211,7 @@ def plot_sampling_graph(metrics_data,
 
         row_data = [['Model'] + [label for label, _, _ in table_checkpoints]]
         curve_values_all = []
+        n_curves = 0
         for model_name, data in metric_data.items():
             if plot_models and model_name not in plot_models:
                 continue
@@ -223,13 +227,15 @@ def plot_sampling_graph(metrics_data,
             curve_values = np.asarray(curve_values, dtype=float)
             valid_points = np.isfinite(curve_values)
             primary_color = next(color_iterator)
-            ax.plot(sample_sizes[valid_points], curve_values[valid_points], linestyle='--', alpha=0.6,
+            curve_linestyle = _WRAP_LINESTYLES[(n_curves // len(color_list)) % len(_WRAP_LINESTYLES)]
+            n_curves += 1
+            ax.plot(sample_sizes[valid_points], curve_values[valid_points], linestyle=curve_linestyle, alpha=0.6,
                     label=_curve_label(model_name), color=primary_color, linewidth=1.0)
 
             if plot_derivative and np.sum(valid_points) >= 2 and ax2 is not None:
                 deriv_vals = np.gradient(curve_values[valid_points], sample_sizes[valid_points])
                 # plot derivative without legend label so the global legend shows only primary curves
-                ax2.plot(sample_sizes[valid_points], deriv_vals, linestyle='--', color=primary_color, linewidth=0.8, alpha=0.9)
+                ax2.plot(sample_sizes[valid_points], deriv_vals, linestyle=curve_linestyle, color=primary_color, linewidth=0.8, alpha=0.9)
 
             def _fmt_value(value):
                 return '-' if not np.isfinite(value) else f"{value:.3f}"
@@ -313,7 +319,7 @@ def plot_sampling_graph_average(metrics_data,
         ]
         table_checkpoints = sorted(table_checkpoints, key=lambda item: item[2])
 
-        row_data = [['Model'] + [label for label, _, _ in table_checkpoints]]
+        row_data = [['Percentile'] + [label for label, _, _ in table_checkpoints]]
         for percentile in range(percentile_range[0], percentile_range[1] + 1):
             curve_values = []
             for model_name, data in metric_data.items():
@@ -345,7 +351,8 @@ def plot_sampling_graph_average(metrics_data,
             def _fmt_value(value):
                 return '-' if not np.isfinite(value) else f"{value:.3f}"
 
-            row_data.append([model_name] + [_fmt_value(curve_values[idx]) for _, idx, _ in table_checkpoints])
+            # Each row is the mean over the models for one percentile
+            row_data.append([f'P{percentile}'] + [_fmt_value(curve_values[idx]) for _, idx, _ in table_checkpoints])
 
         handles, labels = ax.get_legend_handles_labels()
         title = title_template.format(method_label=_plot_method_label(sampling_method, simulation_iterations),
@@ -378,6 +385,8 @@ def plot_all_sampling_errors(metrics_data,
     for sampling_method in ['analytical', 'bootstrap', 'montecarlo']:
         for parameter in ['mean', 'std']:
             parameter_label = 'mean' if parameter == 'mean' else 'standard deviation'
+            # The analytical curve of the standard deviation is a large-N approximation (compute_sampling_error_curve)
+            method_note = ' (large-N approximation)' if sampling_method == 'analytical' and parameter == 'std' else ''
             plot_sampling_graph(
                 metrics_data=metrics_data,
                 analysis_path=analysis_path,
@@ -389,7 +398,7 @@ def plot_all_sampling_errors(metrics_data,
                 n_iterations=n_iterations,
                 curve_method=compute_sampling_error_curve,
                 curve_kwargs={'parameter': parameter},
-                title_template=f'Sampling error of the {parameter_label}\n{{method_label}}',
+                title_template=f'Sampling error of the {parameter_label}\n{{method_label}}{method_note}',
                 y_label=f'Sampling error ({metric_label}, points)',
                 filename_prefix=f'sampling_error_{parameter}',
                 table_title_prefix=f'Sampling Errors ({parameter})',

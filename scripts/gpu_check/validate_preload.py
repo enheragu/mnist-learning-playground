@@ -82,6 +82,9 @@ def main():
     if bad:
         sys.exit(f"Unknown models: {bad}. Available: {list(MODELS)}")
 
+    if not torch.cuda.is_available():
+        sys.exit("ERROR: no CUDA GPU available. This check validates the loader that keeps the dataset on the GPU.")
+
     transform = transforms.Compose([transforms.ToTensor(),
                                     transforms.Normalize((0.5,), (0.5,))])
     train_ds = datasets.MNIST(root=DATA_ROOT, train=True, transform=transform, download=True)

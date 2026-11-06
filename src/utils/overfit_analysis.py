@@ -8,6 +8,10 @@ import matplotlib.pyplot as plt
 
 from utils.log_utils import logTable, color_palette_list
 
+# The mean curve is only defined where at least this fraction of the runs is alive: runs stop at different epochs, and
+# past this point the mean describes the few long runs that remain, not the model
+MIN_ALIVE_RUNS_FRACTION = 0.5
+
 
 def _to_float_curve(values):
     if values is None:
@@ -41,6 +45,20 @@ def _curves_to_matrix(curves):
     return matrix
 
 
+def meanOverAliveRuns(matrix):
+    """Mean over the runs (rows) at each epoch (column), NaN where fewer than MIN_ALIVE_RUNS_FRACTION of the runs are alive."""
+    mean = np.full(matrix.shape[1], np.nan, dtype=float)
+    enough_runs = np.sum(np.isfinite(matrix), axis=0) >= MIN_ALIVE_RUNS_FRACTION * matrix.shape[0]
+    mean[enough_runs] = np.nanmean(matrix[:, enough_runs], axis=0)
+    return mean
+
+
+def _mean_of_run_finals(matrix):
+    """Mean over the runs of the last finite value of each run, wherever each run ended."""
+    finals = [curve[np.isfinite(curve)][-1] for curve in matrix if np.any(np.isfinite(curve))]
+    return float(np.mean(finals)) if finals else np.nan
+
+
 def _safe_value(arr, index):
     if arr.size == 0 or index is None or index < 0 or index >= arr.shape[0]:
         return np.nan
@@ -57,7 +75,8 @@ def _plot_metric_evolution(ax,
                            plot_all_runs,
                            all_runs_alpha,
                            show_xlabel,
-                           y_scale='linear'):
+                           y_scale='linear',
+                           eval_split_label='Test'):
     if train_matrix.size == 0 and test_matrix.size == 0:
         y_axis_label = f"{metric_label} (log scale)" if y_scale == 'log' else metric_label
         if show_xlabel:
@@ -85,7 +104,7 @@ def _plot_metric_evolution(ax,
         return np.where(values > 0, values, np.nan)
 
     if train_matrix.size:
-        train_mean[:train_matrix.shape[1]] = np.nanmean(train_matrix, axis=0)
+        train_mean[:train_matrix.shape[1]] = meanOverAliveRuns(train_matrix)
         train_min[:train_matrix.shape[1]] = np.nanmin(train_matrix, axis=0)
         train_max[:train_matrix.shape[1]] = np.nanmax(train_matrix, axis=0)
         if plot_all_runs:
@@ -94,7 +113,7 @@ def _plot_metric_evolution(ax,
                 ax.plot(epochs[:train_matrix.shape[1]], display_curve, color=train_color, alpha=all_runs_alpha, linewidth=0.8)
 
     if test_matrix.size:
-        test_mean[:test_matrix.shape[1]] = np.nanmean(test_matrix, axis=0)
+        test_mean[:test_matrix.shape[1]] = meanOverAliveRuns(test_matrix)
         test_min[:test_matrix.shape[1]] = np.nanmin(test_matrix, axis=0)
         test_max[:test_matrix.shape[1]] = np.nanmax(test_matrix, axis=0)
         if plot_all_runs:
@@ -111,13 +130,16 @@ def _plot_metric_evolution(ax,
 
     valid_train = np.isfinite(display_train_mean)
     valid_test = np.isfinite(display_test_mean)
+    # The min-max band reaches the last epoch of the longest run; the mean stops earlier (meanOverAliveRuns)
+    band_train = np.isfinite(display_train_min) & np.isfinite(display_train_max)
+    band_test = np.isfinite(display_test_min) & np.isfinite(display_test_max)
 
     if np.any(valid_train):
-        ax.fill_between(epochs[valid_train], display_train_min[valid_train], display_train_max[valid_train], color=train_color, alpha=0.15)
+        ax.fill_between(epochs[band_train], display_train_min[band_train], display_train_max[band_train], color=train_color, alpha=0.15)
         ax.plot(epochs[valid_train], display_train_mean[valid_train], color=train_color, linewidth=2.2, label=f"{train_label} (min-mean-max)")
 
     if np.any(valid_test):
-        ax.fill_between(epochs[valid_test], display_test_min[valid_test], display_test_max[valid_test], color=test_color, alpha=0.15)
+        ax.fill_between(epochs[band_test], display_test_min[band_test], display_test_max[band_test], color=test_color, alpha=0.15)
         ax.plot(epochs[valid_test], display_test_mean[valid_test], color=test_color, linewidth=2.2, label=f"{test_label} (min-mean-max)")
 
     best_epoch = None
@@ -139,7 +161,7 @@ def _plot_metric_evolution(ax,
             linestyle='--',
             linewidth=1.1,
             alpha=0.7,
-            label=f"Best test epoch: {best_epoch}"
+            label=f"Best {eval_split_label.lower()} epoch: {best_epoch}"
         )
 
         for run_curve in test_matrix:
@@ -168,17 +190,8 @@ def _plot_metric_evolution(ax,
         best_epoch_run_std = np.nan
         best_epoch_run_count = 0.0
 
-    last_train_idx = (
-        int(np.where(np.isfinite(train_mean))[0][-1])
-        if np.any(np.isfinite(train_mean)) else None
-    )
-    last_test_idx = (
-        int(np.where(np.isfinite(test_mean))[0][-1])
-        if np.any(np.isfinite(test_mean)) else None
-    )
-
-    train_final = _safe_value(train_mean, last_train_idx)
-    test_final = _safe_value(test_mean, last_test_idx)
+    train_final = _mean_of_run_finals(train_matrix)
+    test_final = _mean_of_run_finals(test_matrix)
 
     if np.isfinite(train_final) and np.isfinite(test_final):
         if higher_is_better:
@@ -293,7 +306,10 @@ def analyzeAndPlotOverfitCurves(metrics_data,
                                 quality_label='Accuracy',
                                 lr_metric_key=None,
                                 train_component_metric_keys=None,
-                                test_component_metric_keys=None):
+                                test_component_metric_keys=None,
+                                eval_split_label='Test'):
+    """eval_split_label names the split of the test_* curves in the plots and tables: 'Test' for MNIST, 'Validation'
+    for YOLO."""
     os.makedirs(analysis_path, exist_ok=True)
     os.makedirs(f"{analysis_path}/tables", exist_ok=True)
 
@@ -315,12 +331,13 @@ def analyzeAndPlotOverfitCurves(metrics_data,
         test_matrix=test_loss_matrix,
         metric_label=loss_label,
         train_label=f'Train {loss_label.lower()}',
-        test_label=f'Validation {loss_label.lower()}',
+        test_label=f'{eval_split_label} {loss_label.lower()}',
         higher_is_better=False,
         plot_all_runs=plot_all_runs,
         all_runs_alpha=all_runs_alpha,
         show_xlabel=False,
         y_scale='log' if loss_log_scale else 'linear',
+        eval_split_label=eval_split_label,
     )
 
     quality_summary = _plot_metric_evolution(
@@ -329,11 +346,12 @@ def analyzeAndPlotOverfitCurves(metrics_data,
         test_matrix=test_quality_matrix,
         metric_label=quality_label,
         train_label=f'Train {quality_label.lower()}',
-        test_label=f'Validation {quality_label.lower()}',
+        test_label=f'{eval_split_label} {quality_label.lower()}',
         higher_is_better=True,
         plot_all_runs=plot_all_runs,
         all_runs_alpha=all_runs_alpha,
         show_xlabel=True,
+        eval_split_label=eval_split_label,
     )
 
     n_samples = len(metrics_data)
@@ -347,11 +365,11 @@ def analyzeAndPlotOverfitCurves(metrics_data,
 
     summary_table = [[
         'Metric',
-        'Best epoch (mean test)',
+        f'Best epoch (mean {eval_split_label.lower()})',
         'Train@best',
-        'Test@best',
+        f'{eval_split_label}@best',
         'Train@final',
-        'Test@final',
+        f'{eval_split_label}@final',
         'Gap@final',
         'Interpretation'
     ]]
@@ -372,17 +390,15 @@ def analyzeAndPlotOverfitCurves(metrics_data,
         if train_matrix.size == 0 or test_matrix.size == 0:
             return np.nan, np.nan, False
 
-        train_mean = np.nanmean(train_matrix, axis=0)
-        test_mean = np.nanmean(test_matrix, axis=0)
+        train_mean = meanOverAliveRuns(train_matrix)
+        test_mean = meanOverAliveRuns(test_matrix)
         best_idx = min(max(0, best_epoch - 1), train_mean.shape[0] - 1, test_mean.shape[0] - 1)
 
         train_best = _safe_value(train_mean, best_idx)
         test_best = _safe_value(test_mean, best_idx)
 
-        train_last_idx = int(np.where(np.isfinite(train_mean))[0][-1]) if np.any(np.isfinite(train_mean)) else None
-        test_last_idx = int(np.where(np.isfinite(test_mean))[0][-1]) if np.any(np.isfinite(test_mean)) else None
-        train_final = _safe_value(train_mean, train_last_idx)
-        test_final = _safe_value(test_mean, test_last_idx)
+        train_final = _mean_of_run_finals(train_matrix)
+        test_final = _mean_of_run_finals(test_matrix)
 
         if not np.isfinite(train_best) or not np.isfinite(test_best) or not np.isfinite(train_final) or not np.isfinite(test_final):
             return np.nan, np.nan, False
@@ -400,11 +416,10 @@ def analyzeAndPlotOverfitCurves(metrics_data,
         if lr_matrix.size == 0:
             return np.nan, np.nan, np.nan
 
-        lr_mean = np.nanmean(lr_matrix, axis=0)
+        lr_mean = meanOverAliveRuns(lr_matrix)
         best_idx = min(max(0, best_epoch - 1), lr_mean.shape[0] - 1)
         lr_best = _safe_value(lr_mean, best_idx)
-        lr_last_idx = int(np.where(np.isfinite(lr_mean))[0][-1]) if np.any(np.isfinite(lr_mean)) else None
-        lr_final = _safe_value(lr_mean, lr_last_idx)
+        lr_final = _mean_of_run_finals(lr_matrix)
 
         if np.isfinite(lr_best) and np.isfinite(lr_final) and lr_best > 0:
             return lr_best, lr_final, lr_final / lr_best
@@ -414,7 +429,7 @@ def analyzeAndPlotOverfitCurves(metrics_data,
         if quality_summary is None or loss_summary is None:
             return '-', np.nan, np.nan, {}
 
-        quality_gap = quality_summary['final_gap']  # train - validation
+        quality_gap = quality_summary['final_gap']  # train - evaluation split
         loss_gap = loss_summary['final_gap']  # test - train
         quality_sustained_divergence = quality_summary.get('sustained_divergence', np.nan)
         loss_sustained_divergence = loss_summary.get('sustained_divergence', np.nan)

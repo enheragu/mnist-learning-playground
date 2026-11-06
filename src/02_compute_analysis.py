@@ -60,12 +60,12 @@ def computeMonteCarloBetterResultSampleSize(data, percentile = 96, percentile_va
     train_iterations = np.mean(n_iterations_monte_carlo)
     train_iterations_std = np.std(n_iterations_monte_carlo) 
 
-    plot_metric_distribution({'': n_iterations_monte_carlo}, train_duration_data = None, metric_label = f'N to hit p{percentile:.0f} (Monte Carlo)', plot_func = None, 
+    plot_metric_distribution({'': n_iterations_monte_carlo}, train_duration_data = None, metric_label = f'Runs before the first above p{percentile:.0f} (Monte Carlo)', plot_func = None, 
                              color_palette = color_palette_list, vertical_lines_acc = [], analysis_path = analysis_path,
                              plot_filename = f'monte_carlo_sample_simulation_{value:.2f}',
                              bin_size=40,
                              title=f'Iterations to exceed p{percentile:.0f} threshold (Monte Carlo)',
-                             x_label='N Samples',
+                             x_label='Runs before the first success',
                              y_label='Percentage (%)',
                              hist_stat='percent',
                              hist_kwargs={'discrete': True},
@@ -101,12 +101,12 @@ def computeBootstrapBetterResultSampleSize(data, percentile = 96, percentile_val
     train_iterations = np.mean(n_iterations_boosttrap)
     train_iterations_std = np.std(n_iterations_boosttrap)
 
-    plot_metric_distribution({'': n_iterations_boosttrap}, train_duration_data = None, metric_label = f'N to hit p{percentile:.0f} (Bootstrap)', plot_func = None, 
+    plot_metric_distribution({'': n_iterations_boosttrap}, train_duration_data = None, metric_label = f'Runs before the first above p{percentile:.0f} (Bootstrap)', plot_func = None, 
                              color_palette = color_palette_list, vertical_lines_acc = [], analysis_path = analysis_path,
                              plot_filename = f'bootstrap_sample_simulation_{value:.2f}',
                              bin_size=40,
                              title=f'Iterations to exceed p{percentile:.0f} threshold (Bootstrap)',
-                             x_label='N Samples',
+                             x_label='Runs before the first success',
                              y_label='Percentage (%)',
                              hist_stat='percent',
                              hist_kwargs={'discrete': True},
@@ -167,7 +167,7 @@ def computeBetterResultSampleSizeMultiPercentiles(dict_data, g_names, percentile
 
         plot_metric_distribution(mc_metric_data,
                                  train_duration_data=None,
-                                 metric_label='N Samples',
+                                 metric_label='Runs before the first success',
                                  plot_func=None,
                                  color_palette=color_palette_list,
                                  vertical_lines_acc=[],
@@ -175,7 +175,7 @@ def computeBetterResultSampleSizeMultiPercentiles(dict_data, g_names, percentile
                                  plot_filename=f"monte_carlo_sample_simulation_multi_p_{name}",
                                  bin_size=40,
                                  title=f"Iterations to exceed threshold (MC) - {name}",
-                                 x_label='N Samples',
+                                 x_label='Runs before the first success',
                                  y_label='Percentage (%)',
                                  hist_stat='percent',
                                  hist_kwargs={'discrete': True},
@@ -183,7 +183,7 @@ def computeBetterResultSampleSizeMultiPercentiles(dict_data, g_names, percentile
 
         plot_metric_distribution(boot_metric_data,
                                  train_duration_data=None,
-                                 metric_label='N Samples',
+                                 metric_label='Runs before the first success',
                                  plot_func=None,
                                  color_palette=color_palette_list,
                                  vertical_lines_acc=[],
@@ -191,7 +191,7 @@ def computeBetterResultSampleSizeMultiPercentiles(dict_data, g_names, percentile
                                  plot_filename=f"bootstrap_sample_simulation_multi_p_{name}",
                                  bin_size=40,
                                  title=f"Iterations to exceed threshold (Boot.) - {name}",
-                                 x_label='N Samples',
+                                 x_label='Runs before the first success',
                                  y_label='Percentage (%)',
                                  hist_stat='percent',
                                  hist_kwargs={'discrete': True},

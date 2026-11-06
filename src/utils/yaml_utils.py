@@ -36,7 +36,7 @@ def dict_merge(dct, merge_dct):
     return dct
 
 
-def updateMetricsLogFile(metrics, file_path="training_metrics.yaml"):
+def updateMetricsLogFile(metrics, file_path="training_metrics.yaml", max_entries=None, entry_pattern=None):
     lock_file = f"{file_path}.lock"
 
     # Read and write under the same lock: with one lock for each, a process writing in between loses its trials
@@ -47,6 +47,14 @@ def updateMetricsLogFile(metrics, file_path="training_metrics.yaml"):
                 all_metrics = yaml.safe_load(file) or {}
         else:
             all_metrics = {}
+
+        # With max_entries, a file that is already full only accepts updates of the entries it holds. Checked under the
+        # lock, so that parallel processes cannot store more entries than the target. entry_pattern counts only the
+        # keys that match it, so the limit agrees with a caller that counts its trials the same way
+        n_entries = len(all_metrics) if entry_pattern is None else sum(1 for key in all_metrics if entry_pattern.match(key))
+        if max_entries is not None and n_entries >= max_entries and not any(key in all_metrics for key in metrics):
+            log(f"Skipped update of metrics file {file_path}: it already holds {n_entries} entries (maximum {max_entries})")
+            return
 
         all_metrics = dict_merge(all_metrics, metrics)
         # all_metrics.update(metrics)

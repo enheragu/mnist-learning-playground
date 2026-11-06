@@ -15,6 +15,7 @@ bootstrap_samples = 40000 # Slow version :) -> 100000
         computes p(best(samples2) > best(samples1))
     The samples come from a simulation (with n_simulations): MonteCarlo draws them from a Normal
     distribution fitted to the provided data, and Bootstrap resamples the provided data.
+    A tie between two sets does not count as a switch.
 """
 def computeSwitchedProbabilityT(dict_data=None, g_names=None, n_simulations = montecarlo_samples, resampling_method = "MonteCarlo", analysis_path = "results/analysis"):
     
@@ -38,10 +39,11 @@ def computeSwitchedProbabilityT(dict_data=None, g_names=None, n_simulations = mo
             raise ValueError(f"Unknown resampling_method='{resampling_method}'. Use 'MonteCarlo' or 'Bootstrap'.")
 
         # Per simulation, keep the best value from the n_samples drawn for each group.
-        # Then compare ordering against the original ordering.
+        # Then look for a reversal of the original order. Only a strict inversion counts: a tie
+        # reverses nothing, and resolving it by position would depend on the order of g_names.
         best_per_group = np.column_stack([np.max(group_samples, axis=1) for group_samples in samples_list])
-        simulated_orders = np.argsort(best_per_group, axis=1)
-        switched_count = np.count_nonzero(np.any(simulated_orders != original_order, axis=1))
+        in_original_order = best_per_group[:, original_order]
+        switched_count = np.count_nonzero(np.any(np.diff(in_original_order, axis=1) < 0, axis=1))
         
         switched_probability = switched_count / n_simulations
         row_list.append([n_samples, switched_probability, 1-switched_probability])

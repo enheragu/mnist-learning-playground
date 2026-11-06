@@ -9,7 +9,6 @@ from torchsummary import summary
 from models import SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L, BatchNormMaxoutNetInNet
 from models.BatchNormMaxoutNetInNet import MINBlock, MaxOutLayer
 from utils.log_utils import log, logTable, c_blue, c_purple, c_alpha_blue, c_alpha_purple, bcolors
-from utils import output_path
 
 analysis_path = './analysis_results/model_info'
 input_size = 28*28
@@ -72,7 +71,6 @@ def generate_mermaid_diagram(model, input_size):
             i += 1     
 
     diagram = "flowchart TD\n"
-    diagram += f"    title {model.model_name}\n"
     
     for layer in grouped_layers:
         if isinstance(layer, tuple):
@@ -129,9 +127,10 @@ def model_brief(model, name=None, bytes_per_param=4, log_screen = True):
 
 if __name__ == "__main__":
     os.makedirs(analysis_path, exist_ok=True)
-    table_data = [["Model", "Layers", "Total Params (M)", "Trainable Params (M)", "Memory (MB)"]]
+    table_data = [["Model", "Layers", "Total Params", "Trainable Params", "Memory (MB)"]]
     for Model in [SimplePerceptron, HiddenLayerPerceptron, DNN_6L, CNN_14L, CNN_3L, CNN_4L, CNN_5L, BatchNormMaxoutNetInNet]:
-        model = Model(input_size=input_size, num_classes=10, output_path=output_path)
+        # No output path: this script only inspects the models, so it must not create their output_data folders
+        model = Model(input_size=input_size, num_classes=10, output_path=None)
         log(f"Summary of {model.model_name} model with input size {input_size} for 10 classes classification:", color=bcolors.OKCYAN)
         # summary(model, input_size=(1, 28, 28))  # Input size: (channels, height, width)
         layers, total_params, trainable_params, mem_mb = model_brief(model, False)

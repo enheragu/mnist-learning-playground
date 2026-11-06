@@ -31,6 +31,8 @@ def compute_sampling_error_curve(data, sample_sizes, method='analytical', n_iter
                 if n_samples < 2:
                     std_error = np.nan
                 else:
+                    # Large-N normal approximation of the standard error of the sample standard deviation, not the exact
+                    # value for small N (about 17% above it at N=2); the Monte Carlo curve gives the small-N behavior
                     std_error = sigma / np.sqrt(2 * (n_samples - 1))
             std_errors.append(std_error)
         return np.array(std_errors)
@@ -58,6 +60,12 @@ def compute_sampling_error_curve(data, sample_sizes, method='analytical', n_iter
 
 
 def compute_at_least_one_exceedance_probability_curve(data, sample_sizes, percentile=95, method='analytical', n_iterations=4000):
+    """Probability that at least one of N runs exceeds the given percentile of the data, for each N in sample_sizes.
+
+    The comparison is strict: a run equal to the threshold does not exceed it. With tied values in the data (results
+    rounded to a few decimals), the values tied with the threshold do not count, so in the Bootstrap the fraction of
+    values above the threshold can be below (100 - percentile)%, and the probability below the analytical one.
+    """
     data = np.asarray(data, dtype=float)
     sample_sizes = np.asarray(sample_sizes, dtype=int)
 
@@ -88,6 +96,8 @@ def compute_at_least_one_exceedance_probability_curve(data, sample_sizes, percen
             probabilities.append(np.mean(trial_successes))
         return np.asarray(probabilities)
 
+    # Population standard deviation (ddof=0), while compute_sampling_error_curve uses ddof=1. It is kept because the
+    # seeded Monte Carlo figures and values of the article come from it; the difference is a factor sqrt(n / (n - 1)).
     g_mean = np.mean(data)
     g_std = np.std(data)
     for n_samples in sample_sizes:

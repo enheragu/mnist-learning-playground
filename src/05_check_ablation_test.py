@@ -41,6 +41,9 @@ kendall_w_analysis = False
 plot_interaction = True
 add_extra_data = False # Includes data from the batch size study
 log_complete_table = False  # CSV version is stored anyway
+# Decision error simulated here (about 30 min). Not the table of the article: this simulation redraws the runs of the
+# second step, while the article table comes from scripts/article/ablation_trees.py, where the viewer reuses each draw
+compute_decision_error_redrawn = False
 
 analysis_path = './analysis_results/ablation_anova'
 number_of_conditions = 9 # Combinations of param changes (3 batch rates with 3 learning rates   )
@@ -85,7 +88,8 @@ def generate_interaction_plot(df, x_var, y_var, hue_var, title, **kwargs):
         # Add individual points in a single wide column with jitter
         sns.stripplot(data=df, x=x_var, y=y_var, hue=hue_var,
                       alpha=0.35, size=2, palette=color_palette_list[:num_hue],
-                      jitter=0.3, legend=False)
+                      jitter=0.3, legend=False,
+                      order=kwargs.get('order'))  # the first plot fixes the categories of the axis
 
         # Add mean line and summary points separated by hue (on top)
         sns.pointplot(data=df, x=x_var, y=y_var, hue=hue_var, palette=color_palette_list[:num_hue],
@@ -144,6 +148,20 @@ def plotScaterplot(pivot_df, output_path='.', filename='scatterplot_conditions')
 """
 def computeDecisionErrorTemplate(df, start_lr = None, start_batch = None, sampling_method = None, iterations=montecarlo_samples):
 
+    # Levels with the highest sample of the step. The comparison is strict and a tie is no win: the tied levels stay
+    # together and share the iteration below, so that the result does not depend on the order of the levels
+    def bestLevels(levels, df_step, param):
+        best_levels = []
+        best_acc = -float('inf')
+        for val in levels:
+            sample = sampling_method(df_step[df_step[param] == val]['accuracy'].values, 1)
+            if sample > best_acc:
+                best_acc = sample
+                best_levels = [val]
+            elif sample == best_acc:
+                best_levels.append(val)
+        return best_levels
+
     batch_list = df['batch_size'].unique()
     lr_list = df['learning_rate'].unique()
     
@@ -164,45 +182,26 @@ def computeDecisionErrorTemplate(df, start_lr = None, start_batch = None, sampli
 
             # print(f"Iteration {it+1}/{iterations}: Starting with {first_param}={first_value}")
             df_first_step = df[df[first_param] == first_value][['index', second_param, 'accuracy']]
-            best_first_level = None
-            best_first_acc = -float('inf')
+            best_first_levels = bestLevels(batch_list if second_param == 'batch_size' else lr_list, df_first_step, second_param)
 
-            for val in (batch_list if second_param == 'batch_size' else lr_list):
-                data = df_first_step[df_first_step[second_param] == val]['accuracy'].values
-                # print(f"First sampling data for {first_param}={first_value}, {second_param}={val}: {len(data)} samples.")
-                sample = sampling_method(
-                    df_first_step[df_first_step[second_param] == val]['accuracy'].values, 1
-                )
-                if sample > best_first_acc:
-                    best_first_acc = sample
-                    best_first_level = val
+            for best_first_level in best_first_levels:
+                df_second_step = df[df[second_param] == best_first_level][['index', first_param, 'accuracy']]
+                best_second_levels = bestLevels(lr_list if first_param == 'learning_rate' else batch_list, df_second_step, first_param)
 
-            df_second_step = df[df[second_param] == best_first_level][['index', first_param, 'accuracy']]
-            best_second_level = None
-            best_second_acc = -float('inf')
+                for best_second_level in best_second_levels:
+                    credit = 1 / (len(best_first_levels) * len(best_second_levels))
+                    if first_param == "learning_rate" and best_second_level == best_trial_lr and \
+                       second_param == "batch_size" and best_first_level == best_trial_batch or \
+                       first_param == "batch_size" and best_second_level == best_trial_batch and \
+                       second_param == "learning_rate" and best_first_level == best_trial_lr:
+                        ok_samples += credit
+                        # tqdm.write("OK sample found!")
+                    else:
+                        no_ok_samples += credit
 
-            for val in (lr_list if first_param == 'learning_rate' else batch_list):
-                data = df_second_step[df_second_step[first_param] == val]['accuracy'].values
-                # print(f"Second sampling data for {first_param}={first_value}, {second_param}={val}: {len(data)} samples.")
-                sample = sampling_method(
-                    df_second_step[df_second_step[first_param] == val]['accuracy'].values, 1
-                )
-                if sample > best_second_acc:
-                    best_second_acc = sample
-                    best_second_level = val
-
-            if first_param == "learning_rate" and best_second_level == best_trial_lr and \
-               second_param == "batch_size" and best_first_level == best_trial_batch or \
-               first_param == "batch_size" and best_second_level == best_trial_batch and \
-               second_param == "learning_rate" and best_first_level == best_trial_lr:
-                ok_samples += 1
-                # tqdm.write("OK sample found!")
-            else:
-                no_ok_samples += 1
-
-            # tqdm.write(f"Sampled best: {first_param}={best_first_level}, {second_param}={best_second_level} | True best: batch_size={best_trial_batch}, learning_rate={best_trial_lr}")
-            # print(f"Sampled best: {first_param}={best_first_level}, {second_param}={best_second_level} | True best: batch_size={best_trial_batch}, learning_rate={best_trial_lr}")
-            # exit()
+                    # tqdm.write(f"Sampled best: {first_param}={best_first_level}, {second_param}={best_second_level} | True best: batch_size={best_trial_batch}, learning_rate={best_trial_lr}")
+                    # print(f"Sampled best: {first_param}={best_first_level}, {second_param}={best_second_level} | True best: batch_size={best_trial_batch}, learning_rate={best_trial_lr}")
+                    # exit()
 
     p_ok = ok_samples / (ok_samples + no_ok_samples)
     p_no_ok = no_ok_samples / (ok_samples + no_ok_samples)
@@ -249,7 +248,9 @@ def computeAblationDecisionErrorProbability(df):
         table_data.append(['Learning Rate', start_lr, f"{montecarlo_p_no_ok:.4f}", f"{bootstrap_p_no_ok:.4f}"])
 
 
-    logTable(table_data, os.path.join(analysis_path, 'tables'), f'ablation_decision_error_probability', screen_log = True)
+    # Other name than the table of the article (scripts/article/ablation_trees.py), which has different values: see
+    # compute_decision_error_redrawn at the top of this file
+    logTable(table_data, os.path.join(analysis_path, 'tables'), f'ablation_decision_error_probability_redrawn', screen_log = True)
 
 if __name__ == "__main__":
     os.makedirs(os.path.join(analysis_path, 'tables'), exist_ok=True)
@@ -328,7 +329,7 @@ if __name__ == "__main__":
         df_removed = df[df.groupby('index', observed=False)['index'].transform('count') < number_of_conditions]
         df = df[df.groupby('index', observed=False)['index'].transform('count') == number_of_conditions]
         log(f"Removed some indexes ({len(df_removed['index'].unique())}) as they do not have {number_of_conditions} trials: {df_removed['index'].unique()}")
-        log(f"Model estimation based on {len(df['index'].unique())} random-condition iterations ({number_of_conditions} per eac; total of {len(ablation_matrix)} trials).")
+        log(f"Model estimation based on {len(df['index'].unique())} random-condition iterations ({number_of_conditions} trials each): {len(df)} trials used of the {len(ablation_matrix)} logged.")
     else:
         log(f"Model estimation based on {len(df['index'].unique())} random-condition iterations; with a total of {len(ablation_matrix)} trials.")
     if len(df['index'].unique()) < 1:
@@ -417,11 +418,12 @@ if __name__ == "__main__":
     ###   Mixed effects models   ##
     ###############################
     if mixedlm_analysis:
-        # The '1|index' term tells the model that each index has its own base intercept (random effect)
-        fixed_effects_formula = f'accuracy ~ {variable_batch} * {variable_learnr} + (1 | index)' 
+        # groups=df["index"] gives each index its own base intercept (random effect). The formula holds the fixed effects
+        # only: patsy would read '(1 | index)' as one more fixed effect. Fitted with ML (reml=False) so that AIC and BIC exist.
+        fixed_effects_formula = f'accuracy ~ {variable_batch} * {variable_learnr}'
         log(f"\nFitting Model with Random Intercepts from {fixed_effects_formula}:", color=bcolors.OKCYAN)
         try:
-            model_intercept = mixedlm(fixed_effects_formula, data=df, groups=df["index"]).fit()
+            model_intercept = mixedlm(fixed_effects_formula, data=df, groups=df["index"]).fit(reml=False)
             log(model_intercept.summary())
             log(f"AIC: {model_intercept.aic:.2f}, BIC: {model_intercept.bic:.2f}")
         except Exception as e:
@@ -434,7 +436,7 @@ if __name__ == "__main__":
         formula_full_random = f'accuracy ~ {variable_batch} * {variable_learnr} + ({variable_batch} + {variable_learnr} | index)'
         log(f"\nFitting Model with Random Slopes with fixed effects ({fixed_effects_formula}) and random effects ({random_effects_formula}):", color=bcolors.OKCYAN)
         try:
-            model_rs = mixedlm(fixed_effects_formula, data=df, groups=df["index"], re_formula=random_effects_formula).fit()
+            model_rs = mixedlm(fixed_effects_formula, data=df, groups=df["index"], re_formula=random_effects_formula).fit(reml=False)
             log(model_rs.summary())
 
             log(f"AIC: {model_rs.aic:.2f}, BIC: {model_rs.bic:.2f}")
@@ -463,7 +465,7 @@ if __name__ == "__main__":
         df_percentile['condition'] = df_percentile['batch_size'].astype(str) + '_' + df_percentile['learning_rate'].astype(str)
         df_percentile['percentile_within_condition'] = df_percentile.groupby('condition')['accuracy'].rank(pct=True, ascending=False)
         percentile_table = df_percentile.pivot_table(index='seed', columns='condition', values='percentile_within_condition')
-        # Percentile table (percentiles go from 0 to 1, where 1 is the best seed performance in that condition)        
+        # Percentile table (ascending=False: from 1/n, the best seed performance in that condition, to 1, the worst)
         log(f"Percentile talbe indexed by seed:\n{percentile_table}")
 
         # Compute the correlation matrix between conditions
@@ -540,8 +542,11 @@ if __name__ == "__main__":
         log("If correlations are low, it implies that the effect of hyperparameters on accuracy varies significantly by seed (i.e., good seeds for one config might be bad for another).")
 
 
-        best_config_per_seed = df.loc[df.groupby('index')['accuracy'].idxmax()]
-        best_config_counts = best_config_per_seed.groupby(['batch_size', 'learning_rate']).size().reset_index(name='count')
+        # A tie is no win for any condition: the conditions tied for the best of a seed share it (fractional count), so
+        # that the percentages sum to 100 and do not depend on the order of the conditions
+        is_seed_best = df['accuracy'] == df.groupby('index')['accuracy'].transform('max')
+        best_config_credit = is_seed_best / is_seed_best.groupby(df['index']).transform('sum')
+        best_config_counts = best_config_credit[is_seed_best].groupby([df['batch_size'], df['learning_rate']]).sum().reset_index(name='count')
         total_seeds = df['index'].nunique()
         best_config_counts['percentage'] = (best_config_counts['count'] / total_seeds) * 100
 
@@ -736,5 +741,6 @@ if __name__ == "__main__":
                                                 '70-0.001', '70-0.005', '70-0.01'], analysis_path)
 
 
-    np.random.seed(analysis_seed)
-    computeAblationDecisionErrorProbability(df)
+    if compute_decision_error_redrawn:
+        np.random.seed(analysis_seed)
+        computeAblationDecisionErrorProbability(df)

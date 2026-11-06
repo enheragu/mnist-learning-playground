@@ -21,6 +21,9 @@ def gamma_amplitude(data):
     data_array = np.asarray(data, dtype=float)
     positive_data = data_array[np.isfinite(data_array) & (data_array > 0)]
 
+    if positive_data.size < data_array.size:
+        log(f"[gamma_amplitude] The gamma fit leaves out {data_array.size - positive_data.size} non-positive values")
+
     if positive_data.size < 2:
         return 0.0
 
@@ -29,6 +32,27 @@ def gamma_amplitude(data):
     percentile_0_1 = gamma.ppf(0.001, k, loc, scale)
     percentile_99_9 = gamma.ppf(0.999, k, loc, scale)
     return percentile_99_9 - percentile_0_1
+
+
+def shapiroPvalueWithoutTies(data, n_repeats=200, seed=0):
+    """
+        Shapiro-Wilk p-value of data that only takes discrete values, where the ties alone can make the test reject (the
+        accuracy moves in steps of 0.01 points with 10,000 test images). Adds uniform noise of half the resolution and
+        returns the median p-value of n_repeats draws. It has its own generator, so the global random state is untouched.
+    """
+    data_array = np.asarray(data, dtype=float)
+    unique_values = np.unique(np.round(data_array, 9))
+    if unique_values.size == data_array.size:
+        return shapiro(data_array).pvalue
+
+    half_step = np.min(np.diff(unique_values)) / 2
+    rng = np.random.default_rng(seed)
+    p_values = [shapiro(data_array + rng.uniform(-half_step, half_step, data_array.size)).pvalue for _ in range(n_repeats)]
+    return float(np.median(p_values))
+
+
+def formatPvalue(p_value):
+    return f"{p_value:.4f}" if p_value >= 1e-4 else f"{p_value:.1e}"
 
 
 def normalityTest(metrics_data,
@@ -41,7 +65,7 @@ def normalityTest(metrics_data,
     for model, data in metrics_data.items():
         metric_data[model] = [entry[metric] * unit_multiplier for entry in metrics_data[model].values()]
 
-    row_data = [['Model', 'Median (%)', 'Mean (%)', 'Kurtosis (Fisher)', 'Shapiro-Wilk: W', 'Shapiro-Wilk: p-value (%)']]
+    row_data = [['Model', 'Median (%)', 'Mean (%)', 'Kurtosis (Fisher)', 'Shapiro-Wilk: W', 'Shapiro-Wilk: p-value', 'Shapiro-Wilk: p-value without ties']]
     for model_name, data in metric_data.items():
         statistic, p_value = shapiro(data)
         kurt = kurtosis(data, fisher=True)
@@ -51,7 +75,8 @@ def normalityTest(metrics_data,
             f"{np.mean(data):.3f}",
             f"{kurt:.4f}",
             f"{statistic:.4f}",
-            f"{p_value:.4f}",
+            formatPvalue(p_value),
+            formatPvalue(shapiroPvalueWithoutTies(data)),
         ])
 
     log(f"\nSummary Table of {metric.title()} Shapiro-Wilk normality test:")
@@ -60,7 +85,7 @@ def normalityTest(metrics_data,
         row_data,
         f"{analysis_path}/tables",
         f"{metric.title()} Normality test{title_suffix}",
-        colalign=['left', 'right', 'right', 'right', 'right', 'right']
+        colalign=['left', 'right', 'right', 'right', 'right', 'right', 'right']
     )
 
 

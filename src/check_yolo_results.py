@@ -5,7 +5,7 @@ import os
 import itertools
 import csv
 from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 import numpy as np
 import seaborn as sns
@@ -19,11 +19,11 @@ from utils.log_utils import log, logTable, bcolors, color_palette_list, print_di
 
 from utils.indexer import Indexer
 from utils import output_path, deposit_path, read_deposit, analysis_seed
-from utils.deposit_data import getDepositYoloResults, getDepositYoloBestMetrics
+from utils.deposit_data import getDepositYoloResults, getDepositYoloFinalMetrics
 from utils.plot_sampling_graph import plot_all_sampling_errors, plot_all_percentile_probabilities, plot_all_percentile_probabilities_average
 from utils.yolo_overfit_utils import (
     runYoloOverfitAnalysis,
-    collectYoloBestMetrics,
+    collectYoloFinalMetrics,
 )
 from utils.compute_switched_probability import (
     computeSwitchedProbability,
@@ -183,11 +183,13 @@ def getYOLOVarianceData(analysis_path, output_path, test_tag="", valid_runs=None
         tasks = []
 
         with ThreadPoolExecutor(max_workers=4) as executor:
-            for dirpath, dirnames, filenames in os.walk(output_path):
+            # In sorted dirpath order, so that the order of the runs (and the seeded resampling that depends on it) does
+            # not change with the file system or with which thread finishes first
+            for dirpath, dirnames, filenames in sorted(os.walk(output_path), key=lambda entry: entry[0]):
                 if valid_runs is not None and 'args.yaml' in filenames and os.path.normpath(dirpath) not in valid_runs:
                     continue
                 tasks.append(executor.submit(process_dir, (dirpath, filenames, parse_mode)))
-            for future in as_completed(tasks):
+            for future in tasks:
                 try:
                     result = future.result()
                     if result:
@@ -412,7 +414,7 @@ if __name__ == "__main__":
         log("[main] The overfit analysis reads the results.csv files of the runs; skipped with the data deposit", bcolors.WARNING)
     elif enable_yolo_overfit_analysis:
         # Empty list means: include all tags present in `tasks`.
-        yolo_overfit_include_tags = ['COCO', 'LLVIP_Ch4v3', 'kaist_day_rgbt', 'kaist_day_vths_v2']
+        yolo_overfit_include_tags = ['kaist_day_rgbt', 'kaist_day_vths_v2']
         runYoloOverfitAnalysis(
             variance_tasks=tasks,
             analysis_output_path=yolo_overfit_analysis_path,
@@ -422,16 +424,15 @@ if __name__ == "__main__":
             loss_log_scale=yolo_overfit_loss_log_scale,
             loss_component=yolo_overfit_loss_component,
             quality_metric_key=yolo_overfit_quality_metric_key,
+            valid_runs=valid_runs,
         )
 
     if enable_yolo_survival_function:
+        # Final evaluation of each run, the same values as the tables (never the maximum over the epochs)
         if read_deposit:
-            survival_map50, survival_map5095 = getDepositYoloBestMetrics(deposit_path)
+            survival_map50, survival_map5095 = getDepositYoloFinalMetrics(deposit_path)
         else:
-            survival_map50, survival_map5095 = collectYoloBestMetrics(
-                variance_tasks=tasks,
-                valid_runs=valid_runs,
-            )
+            survival_map50, survival_map5095 = collectYoloFinalMetrics(results)
         if survival_map50:
             plot_survival_function(
                 metrics_data=survival_map50,

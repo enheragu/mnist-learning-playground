@@ -3,8 +3,8 @@
 Usage: python3 switched_probability.py <export_dir>
 Same simulation as computeSwitchedProbabilityT (src/utils/compute_switched_probability.py): for
 N = 1..5 runs per model, Monte Carlo draws from a normal fitted with the mean and std (ddof=0) of all the runs, and
-Bootstrap resamples the runs with replacement, 4e4 simulations each. A simulation is switched when the order of the
-models differs from the reference order. Two ways of summarising the N runs of each model: their best result (the one of
+Bootstrap resamples the runs with replacement, 4e4 simulations each. A simulation is switched when two models come out
+strictly in the opposite order to the reference order; a tie does not count. Two ways of summarising the N runs of each model: their best result (the one of
 the article so far; reference = order of the maxima of all the runs) and their mean (reference = order of the means of
 all the runs). Both statistics use the same draws, so N = 1 gives the same value in both. Seed 0 per set and method.
 Prints the LaTeX rows of each table (in %) and checks that the reference orders by best, mean and P90 agree.
@@ -18,6 +18,7 @@ from scipy.stats import norm
 
 SIMULATIONS = 40000
 SAMPLE_SIZES = range(1, 6)
+TIE_TOLERANCE = 1e-9
 
 export_dir = sys.argv[1]
 mnist = pd.read_csv(os.path.join(export_dir, "mnist_trials.csv"))
@@ -67,7 +68,8 @@ for title, data in SETS:
                 draws = [rng.choice(v, size=(SIMULATIONS, n), replace=True) for v in values]
             for stat, fn in (("best", np.max), ("mean", np.mean)):
                 summary = np.column_stack([fn(d, axis=1) for d in draws])
-                switched = np.any(np.argsort(summary, axis=1) != reference[stat], axis=1)
+                # Only a strict inversion counts: a tie reverses nothing (the tolerance absorbs the rounding of means)
+                switched = np.any(np.diff(summary[:, reference[stat]], axis=1) < -TIE_TOLERANCE, axis=1)
                 rows[n][(stat, method)] = switched.mean()
     for n in SAMPLE_SIZES:  # in %, one decimal (Monte Carlo noise at 4e4 is about 0.2 points)
         r = rows[n]

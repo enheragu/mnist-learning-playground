@@ -85,7 +85,8 @@ if __name__ == "__main__":
                     test_loader = DataLoader(dataset=test_dataset, batch_size=model.batch_size, shuffle=False)
 
                     metrics = model.spinTrainEval(train_loader, test_loader, num_epochs = num_epochs)
-                    updateMetricsLogFile(metrics, metrics_log_file)
+                    # max_entries: other processes may have reached the target during this training
+                    updateMetricsLogFile(metrics, metrics_log_file, max_entries=num_iter, entry_pattern=date_pattern)
                     updated = True
 
             except Exception as e:
@@ -97,5 +98,8 @@ if __name__ == "__main__":
                 # traceback.print_exception(*sys.exc_info()) 
                 print(F"[ERROR] --- \n[ERROR] --- \n")
 
+    if exception_messages != "":
+        print(f"[ERROR] Exceptions catched during execution: {exception_messages}")
+        print(f"[ERROR] Stopped with errors: the iterations configured may not be complete")
+        sys.exit(1)
     print(f"Finished all iterations configured for all models")
-    if exception_messages != "": print(f"[ERROR] Exceptions catched during execution: {exception_messages}")

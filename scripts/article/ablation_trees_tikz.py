@@ -169,6 +169,7 @@ for out_name, path, start_factor, start_value in TREES:
     tree = build(rows["mc"][0], rows["bs"][0], model_best)
     check(tree, rows["mc"][0], rows["bs"][0])
     layout(tree)
+    os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, f"{out_name}.tex"), "w") as f:
         f.write(tikz(tree))
     print(f"{out_name}: start {start_factor}={start_value}, reach global best ({best}): "

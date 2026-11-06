@@ -56,7 +56,13 @@ def main():
     if len(cks) > 1: sys.exit(f"ABORT: different pools {cks}; not comparable")
     print(f"  common pool_checksum: {cks.pop()}   reference: {ref}")
 
-    conds = sorted({v["model"] for v in cells[ref].values()})
+    # Only the conditions present in all the cells can be compared: the cu118 stack, for example, has no CNN_14L_B10
+    cell_conds = {n: {v["model"] for v in d.values()} for n, d in cells.items()}
+    conds = sorted(set.intersection(*cell_conds.values()))
+    for n, cs in cell_conds.items():
+        if cs.difference(conds):
+            print(f"  left out, not present in all the cells: {sorted(cs.difference(conds))} (in {n})")
+    if not conds: sys.exit("ABORT: no condition is present in all the cells")
     names = list(cells)
 
     h("1. BIT-EXACTNESS per pair  (control, not a result)")
@@ -115,7 +121,7 @@ def main():
         for n in names:
             v = cis[n]
             print(f"  {c if n==names[0] else '':22}{n:12}{v[0]:>11.6f}   [{v[1]:.6f}, {v[2]:.6f}]")
-        print(f"  {'':22}{'-> ' + ('the three OVERLAP' if overlap else 'they do NOT overlap'):50}")
+        print(f"  {'':22}{'-> ' + ('the intervals OVERLAP' if overlap else 'the intervals do NOT overlap'):50}")
 
     h("6. TRANSFERABILITY  p = P(sampling range >= range between cells)")
     ests = [("mean",np.mean),("median",np.median),("p90",lambda z:np.percentile(z,90)),

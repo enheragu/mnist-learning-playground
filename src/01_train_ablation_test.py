@@ -65,11 +65,13 @@ def trainModel(model, batch_size, learning_rate, train_dataset, test_dataset, se
     key = f"{batch_size}-{learning_rate}"
     return {key: data}
 
+iteration_pattern = re.compile(r'.*iteration_')
+
 def runAblationTests(batch_conditions, learning_rates, metrics_log_file, train_dataset, test_dataset):
     seed = 0
     while True:
         metrics = getMetricsLogFile(metrics_log_file)
-        iteration = sum(1 for key in metrics.keys() if 'iteration_' in key)
+        iteration = sum(1 for key in metrics.keys() if iteration_pattern.match(key))
         if not iteration < total_iterations:
             break
 
@@ -84,7 +86,9 @@ def runAblationTests(batch_conditions, learning_rates, metrics_log_file, train_d
             data = trainModel(model, batch_size, learning_rate, train_dataset, test_dataset, seed)
             log(f"[CNN_14L_Ablation] Iteration: {iteration}/{total_iterations} ({batch_size = }, {learning_rate = })")
             new_metrics = {f"{os.getpid()}_iteration_{seed}": data}
-            updateMetricsLogFile(new_metrics, metrics_log_file)
+            # max_entries: with parallel processes, several can pass the check above for the last free iteration. The
+            # one that writes first keeps it and stores its other conditions, since its key is already in the file
+            updateMetricsLogFile(new_metrics, metrics_log_file, max_entries=total_iterations, entry_pattern=iteration_pattern)
 
     log(f"Finished all iterations configured for all models", color=bcolors.OKGREEN)
 
@@ -151,4 +155,7 @@ if __name__ == "__main__":
         log(f"[ERROR] --- \n[ERROR] --- \n[ERROR] CATCHED EXCEPTION: {exception_message}. \n", color=bcolors.ERROR)
         log(F"[ERROR] --- \n[ERROR] --- \n", color=bcolors.ERROR)
 
-    if exception_messages != "": log(f"[ERROR] Exceptions catched during execution: {exception_messages}", color=bcolors.ERROR)
+    if exception_messages != "":
+        log(f"[ERROR] Exceptions catched during execution: {exception_messages}", color=bcolors.ERROR)
+        log(f"[ERROR] Stopped with errors: the iterations configured may not be complete", color=bcolors.ERROR)
+        sys.exit(1)

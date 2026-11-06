@@ -128,11 +128,19 @@ uv pip install -r requirements.lock --index-url https://download.pytorch.org/whl
 On the lab machines, the reference and alternative stacks were installed with
 deployment scripts that are not included here.
 
-### 1. Seed pool
+### 1. Seed pool and dataset
 
 ```bash
 python scripts/gpu_check/make_seed_pool.py --check   # verify seed_pools.yaml
 python scripts/gpu_check/make_seed_pool.py           # rewrite seed_pools.yaml
+```
+
+`run_study.py` reads MNIST from `data/` without downloading it, so on a clean
+clone fetch it first and check its fingerprint (`474311efcf1fd213`):
+
+```bash
+python src/check_dataset.py   # downloads MNIST to data/ and prints the images per class
+(cd data/MNIST/raw && ls *-ubyte | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
 ```
 
 ### 2. Training
@@ -188,8 +196,11 @@ probability that the range between cells is reached by resampling seeds from
 the pooled data; seed-by-seed ranking agreement (Spearman and % of inversions);
 and a seed vs machine variance decomposition. `--ref` selects the reference
 cell (default: the first one) and `--boot` the number of bootstrap replicates
-(default 40000, as in the article). The transferability and variance sections pair trials by key
-using the keys of the reference cell, so every cell must contain all of them.
+(default 40000, as in the article). Only the conditions present in all the cells
+are analyzed; the others are listed in the `CELLS` section of the output (the
+cu118 stack, for example, has no `CNN_14L_B10`). Within a condition, the
+transferability and variance sections pair trials by key using the keys of the
+reference cell, so every cell must contain all of them.
 
 `compare_runs.py` gives a shorter comparison over the trials common to several
 output directories (initial-weight agreement, final-weight bit-exactness,
@@ -197,8 +208,13 @@ seconds per trial, mean accuracy):
 
 ```bash
 python scripts/gpu_check/compare_runs.py output_data_gpucheck_rtx4090-cu128 output_data_gpucheck_rtx5080-a-cu128
-python scripts/gpu_check/compare_runs.py --glob 'output_data_gpucheck_*-cu128'
+python scripts/gpu_check/compare_runs.py --glob 'output_data_gpucheck_*[!b]-cu128'
 ```
+
+Each directory counts as one machine, and the script stops with an error if they
+have no trial in common. The `a` and `b` tags split the seeds of one cell between
+two machines, so they must not be globbed together: the pattern above leaves out
+the `b` tag. Use `analyze_cells.py` to merge them into one cell.
 
 ### 4. Checks
 
@@ -250,7 +266,8 @@ by its content (`src/` and `requirements.lock`), copy it to
 PyTorch index. All of them except `run_kernel_mechanism.py` also compute the
 training and dataset fingerprints, abort if they differ from the values in
 `FINGERPRINTS.txt` when the dataset contains that file (keys
-`training_fingerprint` and `dataset_fingerprint`), and check that the assigned GPU
+`training_fingerprint` and `dataset_fingerprint`; without them they print
+`not checked`), and check that the assigned GPU
 can run the installed stack. The scripts that build the dataset and launch the
 kernels, and the lab deployment scripts, are not included.
 
@@ -258,6 +275,10 @@ Kaggle kernels do not receive environment variables, so the run configuration
 (phases, conditions, shards, limits, deadlines) is set in constants at the top
 of each file. The `EEHA_TAG` variable read by `checks_kernel.py`,
 `run_kernel_prod.py` and `run_kernel_p100.py` only takes effect outside Kaggle.
+These constants are frozen to the last session of the study, so a new run has to
+update them first: `run_kernel_prod.py`, for example, aborts unless `repo/resume/`
+holds exactly the 715 trials and 12 shard files of that session (`EXPECTED_RESUME`
+and `PHASES`).
 
 | kernel | stack | what it does |
 |---|---|---|
@@ -305,9 +326,15 @@ record per trial, keyed `<model>__<seed>`, with these fields:
 | `pool_checksum` | checksum of the seed pool |
 
 Weight hashes are the first 16 hex digits of a SHA-256 over the state dict, with
-keys in sorted order and values as float32 bytes. During training the model
-checkpoints go to `output_data_gpucheck_<tag>/_ckpt/` and are deleted after each
-trial; only the hashes are kept.
+keys in sorted order and values as float32 bytes; only the hashes are kept in the
+results. During training the model checkpoints go to
+`output_data_gpucheck_<tag>/_ckpt/<model>/<pid>_best_model.pth`, one file per
+process and condition that each new trial overwrites, about 91 MB per process
+with the six conditions. `run_study.py` does not delete them (its cleanup only
+looks at the top level of `_ckpt/`, which holds folders) and nothing reads them
+afterwards. Once all the processes of the tag have finished, free the space with
+`rm -rf output_data_gpucheck_<tag>/_ckpt`; not before, because they share that
+folder.
 
 ## Training fingerprint
 
@@ -319,7 +346,8 @@ The training fingerprint covers `src/models`, `src/utils/set_seed.py`,
 { find src/models -type f -name '*.py'; ls src/utils/set_seed.py requirements.lock scripts/gpu_check/run_study.py scripts/gpu_check/preloaded_loader.py; } | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16
 ```
 
-The fingerprint of the files used in the study was `b789b9bf7d14346e`. The
+These files are frozen so that the fingerprint stays valid, which is why `run_study.py --dry-run` still creates the
+output folder. The fingerprint of the files used in the study was `b789b9bf7d14346e`. The
 copies published here differ from those only in comments, docstrings and
 messages, so their fingerprint is `f454e24cce0d2325`. The dataset fingerprint,
 over the `*-ubyte` files, is computed with:

@@ -53,6 +53,9 @@ def getAllModelData(output_path):
 """
     Converts the ablation log ({iteration: {condition: trial}}) to a format
     compatible with previous functions and single execution YAML format.
+    Every trial is kept, also those of the iterations that did not finish all the conditions (308 to 310 trials per
+    condition, as the article states for its histograms). 05_check_ablation_test.py uses only the complete iterations
+    (300 per condition), so per-condition statistics from this data and from 05 are computed on different runs.
 """
 def ablationLogToModelData(ablation_metrics):
     metrics_data = {}
@@ -70,6 +73,10 @@ def ablationLogToModelData(ablation_metrics):
                  'best_epoch': trial['best_epoch']
                 }
     
+    if metrics_data:
+        trials_per_condition = [len(trials) for trials in metrics_data.values()]
+        log(f"Ablation data: {min(trials_per_condition)} to {max(trials_per_condition)} trials per condition, "
+            "including the incomplete iterations")
     return metrics_data
 
 

@@ -211,7 +211,7 @@ def biased_resample(data, target_mean, target_std, subset_size, max_iter=30000,
     Plots biaserd distributions (same normal with mean and std) with all data centered,
     or no data at right side or left side
 """
-def plot_example_distributions(metrics_data, new_sample_size=50, analysis_path=analysis_path, vertical_lines_acc=[99.57],model='CNN_14L'):
+def plot_example_distributions(metrics_data, new_sample_size=50, analysis_path=analysis_path, vertical_lines_acc=[99.56],model='CNN_14L'):
     
     data = np.array([entry['accuracy']*100 for entry in metrics_data[model].values()])
     mean = np.mean(data)
@@ -262,6 +262,7 @@ if __name__ == "__main__":
                                 models_plot_list=[ablatipon_models],
                                 color_list=[color_palette_list],
                                 analysis_path=analysis_path,
+                                plot_filename='plot_accuracy_ablation',
                                 paper_size=True)
             plotDataDistribution(metrics_data=ablation_metrics,
                                 models_plot_list=[ablatipon_models],

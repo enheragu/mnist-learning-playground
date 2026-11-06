@@ -21,6 +21,9 @@ analysis_path = './analysis_results/loss_surface'
 
 plot_side_num_points = 50
 
+# Seed of the random directions, so that every run gives the same surface
+direction_seed = 0
+
 # Evaluates the mean loss over a dataloader
 def eval_loss(model, loss_fn, dataloader, device):
     model.eval()
@@ -36,10 +39,20 @@ def eval_loss(model, loss_fn, dataloader, device):
             total_samples += batch_size
     return total_loss / total_samples
 
-# Normalizes a list of tensors as a direction (filter normalization)
-def normalize_direction(direction):
-    norm = torch.sqrt(sum(torch.sum(d**2) for d in direction))
-    return [d / norm for d in direction]
+# Filter normalization (Li et al., Visualizing the Loss Landscape of Neural Nets, NeurIPS 2018): each filter of the
+# direction takes the norm of the same filter in the weights. A filter is one output channel of a Conv2d or one output
+# neuron of a Linear (first dimension of the tensor). One-dimensional parameters (biases and BatchNorm) are not perturbed.
+def normalize_direction(direction, weights):
+    normalized = []
+    for d, w in zip(direction, weights):
+        if d.dim() <= 1:
+            normalized.append(torch.zeros_like(d))
+            continue
+        d_norm = d.view(d.size(0), -1).norm(dim=1)
+        w_norm = w.view(w.size(0), -1).norm(dim=1)
+        scale = w_norm / (d_norm + 1e-10)
+        normalized.append(d * scale.view(-1, *[1] * (d.dim() - 1)))
+    return normalized
 
 # Shifts the model parameters along two directions, scaled by alpha and beta
 def add_direction_to_params(model, base_params, direction1, direction2, alpha, beta):
@@ -49,7 +62,8 @@ def add_direction_to_params(model, base_params, direction1, direction2, alpha, b
 
 def generateModelLossSurface(model_param_path, analysis_path):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = CNN_14L(input_size=28*28).to(device)
+    # No output path: this script only reads a stored model, so it must not create a ./CNN_14L folder
+    model = CNN_14L(input_size=28*28, output_path=None).to(device)
     loss_fn = torch.nn.CrossEntropyLoss()
 
     model.load_state_dict(torch.load(model_param_path, map_location=device))
@@ -62,10 +76,11 @@ def generateModelLossSurface(model_param_path, analysis_path):
     base_params = [p.data.clone() for p in model.parameters()]
 
     # Generate two random directions and normalize them
+    torch.manual_seed(direction_seed)
     direction1 = [torch.randn_like(p) for p in model.parameters()]
     direction2 = [torch.randn_like(p) for p in model.parameters()]
-    direction1 = normalize_direction(direction1)
-    direction2 = normalize_direction(direction2)
+    direction1 = normalize_direction(direction1, base_params)
+    direction2 = normalize_direction(direction2, base_params)
 
     alpha_vals = np.linspace(-1, 1, plot_side_num_points)
     beta_vals = np.linspace(-1, 1, plot_side_num_points)

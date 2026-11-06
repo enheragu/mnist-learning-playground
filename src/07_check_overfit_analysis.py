@@ -23,6 +23,9 @@ loss_log_scale = True
 
 def _discover_overfit_models(base_output_path, metrics_file_name):
     model_names = []
+    # The overfitting analysis reads the training logs, which the data deposit does not include
+    if not os.path.isdir(base_output_path):
+        return model_names
     for entry in sorted(os.listdir(base_output_path)):
         model_dir = os.path.join(base_output_path, entry)
         if not os.path.isdir(model_dir):

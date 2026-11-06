@@ -154,7 +154,10 @@ if exp.get("training_fingerprint") and got_t != exp["training_fingerprint"]:
     sys.exit("ERROR: the code does not match the study reference")
 if exp.get("dataset_fingerprint") and got_d != exp["dataset_fingerprint"]:
     sys.exit("ERROR: the dataset does not match the study reference")
-print("  -> they match")
+if exp.get("training_fingerprint") and exp.get("dataset_fingerprint"):
+    print("  -> they match")
+else:
+    print("  -> not checked: FINGERPRINTS.txt is absent or incomplete")
 
 # --------------------------------------------------------------- 3. stack
 section(f"3. Stack torch {TORCH_VERSION}+{CUDA_TAG}")

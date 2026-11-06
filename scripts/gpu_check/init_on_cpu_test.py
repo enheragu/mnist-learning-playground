@@ -76,6 +76,9 @@ def main():
     ap.add_argument("--tag", required=True)
     args = ap.parse_args()
 
+    if not torch.cuda.is_available():
+        sys.exit("ERROR: no CUDA GPU available. This check compares the initial weights built on the GPU and on the CPU.")
+
     import tempfile
     p = torch.cuda.get_device_properties(0)
     c = torch.cuda.get_device_capability(0)

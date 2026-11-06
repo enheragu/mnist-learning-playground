@@ -82,6 +82,10 @@ def main():
 
     common = set.intersection(*(set(d) for d in runs.values()))
     print(f"\n  trial intersection: {len(common)}")
+    if not common:
+        sys.exit("ERROR: these directories have no trial in common, so there is nothing to compare. Directories that\n"
+                 "       hold different seeds of one cell (for example tags rtx5080-a and rtx5080-b) cannot be compared\n"
+                 "       with each other: list only one of them here, or merge them with analyze_cells.py.")
 
     # --------------------------------------------------------------- times
     print("\n" + "=" * 78)

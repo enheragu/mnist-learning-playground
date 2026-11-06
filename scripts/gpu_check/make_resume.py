@@ -53,18 +53,23 @@ def main():
     index_of = {m: {s: i for i, s in enumerate(seeds)} for m, seeds in pools.items()}
 
     data = {}
+    # Collected per file, before merging: the merge is by key, so trials of one
+    # cell would overwrite those of another and hide the mix.
+    caps = set()
+    cks = set()
     for pat in args.dirs:
         for d in sorted(glob.glob(pat)):
             for f in sorted(glob.glob(os.path.join(d, "gpupool_training_metrics_p*.yaml"))):
-                data.update(yaml.safe_load(open(f)) or {})
+                trials = yaml.safe_load(open(f)) or {}
+                caps.update(v.get("capability") for v in trials.values())
+                cks.update(v.get("pool_checksum") for v in trials.values())
+                data.update(trials)
     if not data:
         sys.exit("ABORT: no trial found in --dirs")
 
     # Consistency: mixing different cells here would be catastrophic, because
     # the runner would treat trials from OTHER hardware as done and would not
     # repeat them.
-    caps = {v.get("capability") for v in data.values()}
-    cks = {v.get("pool_checksum") for v in data.values()}
     if len(caps) > 1:
         sys.exit(f"ABORT: the directories mix architectures {caps}. "
                  "Resuming is only valid within a single cell.")

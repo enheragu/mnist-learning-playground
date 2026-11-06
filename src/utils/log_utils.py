@@ -3,6 +3,7 @@
 # encoding: utf-8
 
 import os
+import re
 from tqdm import tqdm
 import tabulate
 
@@ -49,6 +50,17 @@ def log(*args, color=bcolors.ENDC, **kwargs):
     tqdm.write(f"{color}{message}{bcolors.ENDC}", **kwargs)
 
 
+def _boldLatexHeader(table_latex):
+    """Bolds the cells of the header row only: the first row after the first rule of the tabular environment."""
+    lines = table_latex.split('\n')
+    header_index = lines.index('\\hline') + 1
+    row = lines[header_index].rstrip()
+    row = row[:-2] if row.endswith('\\\\') else row
+    cells = [cell.strip() for cell in re.split(r'(?<!\\)&', row)]
+    lines[header_index] = ' & '.join(f"\\textbf{{{cell}}}" if cell else '' for cell in cells) + ' \\\\'
+    return '\n'.join(lines)
+
+
 def logTable(row_data, output_path = None, filename = "", colalign = None, screen_log = True):
 
     table_str = tabulate.tabulate(row_data, headers="firstrow", tablefmt="fancy_grid", colalign = colalign)
@@ -66,9 +78,7 @@ def logTable(row_data, output_path = None, filename = "", colalign = None, scree
             file.write(f'{filename}\n')
             file.write(table_str)
 
-        headers = row_data[0]
-        for i in range(len(headers)):
-            table_latex = table_latex.replace(headers[i], f"\\textbf{{{headers[i]}}}")
+        table_latex = _boldLatexHeader(table_latex)
 
         caption = f"{filename}"
         label = f"tab:{filename.lower().replace(' ','_')}"

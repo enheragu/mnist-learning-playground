@@ -35,6 +35,7 @@ PAPER_FIG_SIZE_IN = (3.3, 2.6)
 PAPER_RC = {'font.size': 8, 'axes.titlesize': 8, 'axes.labelsize': 8, 'xtick.labelsize': 7.5,
             'ytick.labelsize': 7.5, 'legend.fontsize': 6.5, 'axes.linewidth': 0.6}
 PAPER_LINE_SCALE = 0.5  # line widths of the large canvas, scaled to the printed size
+_WRAP_LINESTYLES = ['-', '--', ':', '-.']  # one per pass over the palette in the survival plot
 
 
 def display_name(name):
@@ -66,9 +67,11 @@ def plot_metric_normaldistribution(data_y, ax, color, mean=None, std=None, lines
         x = np.linspace(x_left, x_right, 100)
         y = norm.pdf(x, mean, std)
         sns.lineplot(x=x, y=y, linestyle=linestyle, linewidth=2 * line_scale, color=color, ax=ax)
-        for pos in np.arange(mean - std * 3, mean + std * 3, std):
-            linewidth = (1 if abs(pos-mean) >= 0.01 else 2) * line_scale
-            linestyle = ':' if abs(pos-mean) >= 0.01 else 'solid'
+        # Mean (k = 0) and -3 to +3 standard deviations; an integer k does not depend on the scale of the data
+        for k in range(-3, 4):
+            pos = mean + k * std
+            linewidth = (2 if k == 0 else 1) * line_scale
+            linestyle = 'solid' if k == 0 else ':'
             ax.vlines(x=pos, ymin=0, ymax=norm.pdf(pos, mean, std), colors=color, linewidth=linewidth, linestyles=linestyle)
 
 def plot_metric_gammadistribution(data_y, ax, color, mean=None, std=None, linestyle='--', line_scale=1.0):
@@ -175,10 +178,13 @@ def _plotMetricDistribution(metrics_data, train_duration_data = None, metric_lab
 
     if metric_label == "Accuracy (%)":
         if vertical_lines_acc:
-            lines_in_range = [line for line in vertical_lines_acc if x_range[0] <= line <= x_range[1]]
-            lines_out_range = [x for x in vertical_lines_acc if not (x_range[0] <= x <= x_range[1])]
+            # At two decimals, the resolution of the values (so that float noise does not move a line across a bound),
+            # and strict: a value equal to a bound of the range is not inside it
+            range_low, range_high = round(x_range[0], 2), round(x_range[1], 2)
+            lines_in_range = [line for line in vertical_lines_acc if range_low < round(line, 2) < range_high]
+            lines_out_range = [line for line in vertical_lines_acc if not range_low < round(line, 2) < range_high]
             count_in_range = len(lines_in_range)
-            print(f"[{metric_label}] Models {'_'.join(list(metrics_data.keys()))} with range {x_range} include {count_in_range} models from review.")
+            print(f"[{metric_label}] Models {'_'.join(list(metrics_data.keys()))} with range {[range_low, range_high]} include {count_in_range} models from review.")
 
             # Lines outside the range (grey, dotted, no label)
             if lines_out_range:
@@ -412,6 +418,10 @@ def plotDataDistribution(metrics_data, models_plot_list = [[]], color_list = col
             else:
                 print(f"\t· [WARNING] {model} not in metrics available: {metrics_data.keys()}")
 
+        # None of the models of this entry is available: there is nothing to plot
+        if not accuracy_data:
+            continue
+
         if plot_train_duration:
             plot_metric_distribution(train_duration_data, train_duration_data, metric_label = 'Train Duration (s)', plot_func=plot_metric_gammadistribution, color_palette=color_scheme, vertical_lines_acc=vertical_lines_acc, analysis_path=analysis_path, show_histogram=show_histogram, paper_size=paper_size)
         if plot_best_epoch:
@@ -441,7 +451,7 @@ def _plotSurvivalFunction(metrics_data,
                           legend_ncol=2,
                           figsize=(12, 9),
                           line_scale=1.0):
-    """Empirical percentile exceedance calibration — one line per model.
+    """Empirical percentile exceedance calibration: one line per model.
 
     metric-agnostic: pass any pre-extracted list of floats per model, e.g.
         {'CNN_14L': [99.1, 99.4, ...]}           # accuracy
@@ -449,7 +459,7 @@ def _plotSurvivalFunction(metrics_data,
         {'yolo_task': [0.55, 0.61, ...]}         # mAP50-95
 
     X axis: percentile P.
-    Y axis: empirical P(X >= x_p) [%].
+    Y axis: empirical P(X > x_p) [%].
     Dashed line: theoretical 100-P % (continuous distribution reference).
     """
     os.makedirs(analysis_path, exist_ok=True)
@@ -474,7 +484,7 @@ def _plotSurvivalFunction(metrics_data,
             continue
         n = len(data)
 
-        # Thresholds from fitted normal — NOT from the data itself.
+        # Thresholds from fitted normal, NOT from the data itself.
         # This makes the comparison meaningful: empirical tail vs. theoretical tail.
         mean = np.mean(data)
         std = np.std(data)
@@ -485,7 +495,9 @@ def _plotSurvivalFunction(metrics_data,
         empirical_rates = [np.mean(data > t) * 100.0 for t in theoretical_thresholds]
 
         color = color_palette_list[idx % len(color_palette_list)]
-        ax.plot(percentiles, empirical_rates,
+        # Once the palette wraps, the line style tells apart the curves that share a color
+        linestyle = _WRAP_LINESTYLES[(idx // len(color_palette_list)) % len(_WRAP_LINESTYLES)]
+        ax.plot(percentiles, empirical_rates, linestyle=linestyle,
                 color=color, linewidth=1.6 * line_scale, label=f"{display_name(model_name)} (n={n})", alpha=0.85)
 
         key_vals = [f"{np.mean(data > norm.ppf(p/100.0, loc=mean, scale=std)) * 100:.1f}%" for p in key_ps]
@@ -497,7 +509,7 @@ def _plotSurvivalFunction(metrics_data,
     ax.set_xticks(np.arange(int(np.ceil(percentile_start)), 101, 1))
     ax.autoscale(axis='y')
     ax.set_ylim(bottom=0)
-    ax.set_title(f"{metric_label}: P(X ≥ x_p)")
+    ax.set_title(f"{metric_label}: P(X > x_p)")
     legend_handles, legend_labels = ax.get_legend_handles_labels()
     ax.grid(True, alpha=0.3)
     if legend_labels and line_scale != 1.0:

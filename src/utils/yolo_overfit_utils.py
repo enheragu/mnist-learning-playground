@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from utils.log_utils import log, logTable, bcolors, color_palette_list
-from utils.overfit_analysis import analyzeAndPlotOverfitCurves
+from utils.overfit_analysis import analyzeAndPlotOverfitCurves, meanOverAliveRuns
 
 
 def _to_float_or_nan(value):
@@ -16,6 +16,11 @@ def _to_float_or_nan(value):
         return float(value)
     except Exception:
         return np.nan
+
+
+def _sum_or_nan(values):
+    """Sum of the finite values; NaN (not 0) when none is finite, as in an epoch without any loss."""
+    return np.nansum(values) if np.any(np.isfinite(values)) else np.nan
 
 
 def yolo_results_csv_to_metrics_run(csv_path):
@@ -55,8 +60,8 @@ def yolo_results_csv_to_metrics_run(csv_path):
             val_cls = _to_float_or_nan(row.get('val/cls_loss', np.nan))
             val_dfl = _to_float_or_nan(row.get('val/dfl_loss', np.nan))
 
-            train_total = np.nansum([train_box, train_cls, train_dfl])
-            val_total = np.nansum([val_box, val_cls, val_dfl])
+            train_total = _sum_or_nan([train_box, train_cls, train_dfl])
+            val_total = _sum_or_nan([val_box, val_cls, val_dfl])
 
             map50_key = 'metrics/mAP50(B)' if 'metrics/mAP50(B)' in normalized_fieldnames else 'metrics/mAP50'
             map50_95_key = 'metrics/mAP50-95(B)' if 'metrics/mAP50-95(B)' in normalized_fieldnames else 'metrics/mAP50-95'
@@ -228,7 +233,7 @@ def plotYoloLossComponentsOverview(metrics_data,
         test_max = np.full(max_len, np.nan, dtype=float)
 
         if train_matrix.size:
-            train_mean[:train_matrix.shape[1]] = np.nanmean(train_matrix, axis=0)
+            train_mean[:train_matrix.shape[1]] = meanOverAliveRuns(train_matrix)
             train_min[:train_matrix.shape[1]] = np.nanmin(train_matrix, axis=0)
             train_max[:train_matrix.shape[1]] = np.nanmax(train_matrix, axis=0)
             if plot_all_runs:
@@ -237,7 +242,7 @@ def plotYoloLossComponentsOverview(metrics_data,
                     axis.plot(epochs[:train_matrix.shape[1]], curve_plot, color=color_palette_list[0], alpha=all_runs_alpha, linewidth=0.8)
 
         if test_matrix.size:
-            test_mean[:test_matrix.shape[1]] = np.nanmean(test_matrix, axis=0)
+            test_mean[:test_matrix.shape[1]] = meanOverAliveRuns(test_matrix)
             test_min[:test_matrix.shape[1]] = np.nanmin(test_matrix, axis=0)
             test_max[:test_matrix.shape[1]] = np.nanmax(test_matrix, axis=0)
             if plot_all_runs:
@@ -255,12 +260,14 @@ def plotYoloLossComponentsOverview(metrics_data,
 
         valid_train = np.isfinite(train_mean)
         valid_test = np.isfinite(test_mean)
+        band_train = np.isfinite(train_min) & np.isfinite(train_max)
+        band_test = np.isfinite(test_min) & np.isfinite(test_max)
 
         if np.any(valid_train):
-            axis.fill_between(epochs[valid_train], train_min[valid_train], train_max[valid_train], color=color_palette_list[0], alpha=0.15)
+            axis.fill_between(epochs[band_train], train_min[band_train], train_max[band_train], color=color_palette_list[0], alpha=0.15)
             axis.plot(epochs[valid_train], train_mean[valid_train], color=color_palette_list[0], linewidth=2.0, label='Train (min-mean-max)')
         if np.any(valid_test):
-            axis.fill_between(epochs[valid_test], test_min[valid_test], test_max[valid_test], color=color_palette_list[3], alpha=0.15)
+            axis.fill_between(epochs[band_test], test_min[band_test], test_max[band_test], color=color_palette_list[3], alpha=0.15)
             axis.plot(epochs[valid_test], test_mean[valid_test], color=color_palette_list[3], linewidth=2.0, label='Validation (min-mean-max)')
 
         ylabel = f'{label} (log scale)' if loss_log_scale else label
@@ -294,7 +301,10 @@ def runYoloOverfitAnalysis(variance_tasks,
                            loss_log_scale=True,
                            loss_component='total',
                            quality_metric_key='mAP50',
-                           quality_label=None):
+                           quality_label=None,
+                           valid_runs=None):
+    """Overfit analysis from the results.csv files. If valid_runs is given, only those run folders are used (see
+    utils/yolo_run_validity.py)."""
     os.makedirs(analysis_output_path, exist_ok=True)
     os.makedirs(f"{analysis_output_path}/tables", exist_ok=True)
 
@@ -320,7 +330,7 @@ def runYoloOverfitAnalysis(variance_tasks,
             log(f"[runYoloOverfitAnalysis] Skipping '{tag}' due to .exclude_from_analysis marker", bcolors.WARNING)
             continue
 
-        csv_paths, missing_csv_dirs = discoverYoloResultsCSV(experiment_output_path)
+        csv_paths, missing_csv_dirs = discoverYoloResultsCSV(experiment_output_path, valid_runs=valid_runs)
         log(f"[runYoloOverfitAnalysis] Discovered {len(csv_paths)} results.csv files for '{tag}'", bcolors.OKBLUE)
         if missing_csv_dirs:
             log(f"[runYoloOverfitAnalysis] Found {len(missing_csv_dirs)} runs with args.yaml but without results.csv for '{tag}'", bcolors.WARNING)
@@ -361,6 +371,7 @@ def runYoloOverfitAnalysis(variance_tasks,
                 lr_metric_key='lr_mean_plot',
                 train_component_metric_keys=['train_box_loss_plot', 'train_cls_loss_plot', 'train_dfl_loss_plot'],
                 test_component_metric_keys=['test_box_loss_plot', 'test_cls_loss_plot', 'test_dfl_loss_plot'],
+                eval_split_label='Validation',
             )
             component_interpretations.append((selected_component, analysis_result.get('interpretation', '-')))
             scale_tag = 'log' if component_loss_log_scale else 'linear'
@@ -417,44 +428,23 @@ def runYoloOverfitAnalysis(variance_tasks,
             log(f"[runYoloOverfitAnalysis] Consensus for '{tag}': {consensus_label} ({interpretation_counts})", bcolors.OKBLUE)
 
 
-def collectYoloBestMetrics(variance_tasks, include_tags=None, valid_runs=None):
-    """For each task collect the best (max over epochs) mAP50 and mAP50-95 per run.
-    If valid_runs is given, only those run folders are used (see utils/yolo_run_validity.py).
+def collectYoloFinalMetrics(yolo_results, include_tags=None):
+    """mAP50 and mAP50-95 of the final evaluation of each run: the values of the tables (validation_0 in results.yaml,
+    as getYOLOVarianceData() combines them), with the same runs per group.
 
     Returns:
-        survival_map50_data:   {tag: [best_mAP50_per_run]}
-        survival_map5095_data: {tag: [best_mAP5095_per_run]}
+        survival_map50_data:   {tag: [final_mAP50_per_run]}
+        survival_map5095_data: {tag: [final_mAP5095_per_run]}
     """
     include_tags = include_tags or []
     survival_map50_data = {}
     survival_map5095_data = {}
 
-    for _, experiment_output_path, tag in variance_tasks:
+    for tag, data in yolo_results.items():
         if include_tags and tag not in include_tags:
             continue
-        if os.path.exists(os.path.join(experiment_output_path, '.exclude_from_analysis')):
-            log(f"[collectYoloBestMetrics] Skipping '{tag}' due to .exclude_from_analysis marker", bcolors.WARNING)
-            continue
-        csv_paths, _ = discoverYoloResultsCSV(experiment_output_path, valid_runs=valid_runs)
-        best_map50 = []
-        best_map5095 = []
-        for csv_path in csv_paths:
-            run_data = yolo_results_csv_to_metrics_run(csv_path)
-            if not run_data:
-                continue
-            curve50 = run_data.get('mAP50', [])
-            curve5095 = run_data.get('mAP50-95', [])
-            if curve50:
-                v = np.nanmax(np.asarray(curve50, dtype=float))
-                if np.isfinite(v):
-                    best_map50.append(v)
-            if curve5095:
-                v = np.nanmax(np.asarray(curve5095, dtype=float))
-                if np.isfinite(v):
-                    best_map5095.append(v)
-        if best_map50:
-            survival_map50_data[tag] = best_map50
-        if best_map5095:
-            survival_map5095_data[tag] = best_map5095
+        all_classes = data['validation_0']['data']['all']
+        survival_map50_data[tag] = list(all_classes['mAP50'])
+        survival_map5095_data[tag] = list(all_classes['mAP50-95'])
 
     return survival_map50_data, survival_map5095_data

@@ -88,8 +88,11 @@ if __name__ == "__main__":
                     # Create custom output path for overfit test (so .pth files go to the correct folder)
                     model_output_path = os.path.join(output_path, f"{ModelClass.__name__}_overfit_{overfit_reduction}")
                     os.makedirs(model_output_path, exist_ok=True)
-                    model = ModelClass(input_size=input_size, num_classes=num_classes, learning_rate=learning_rate, patience=patience, seed=seed, output_path=model_output_path)
-                    model.model_name = ""  # Clear to avoid double subfolder creation
+                    # Trained on a reduced dataset: the marker keeps these runs out of the general analysis (see getAllModelData)
+                    open(os.path.join(model_output_path, ".exclude_from_analysis"), "a").close()
+                    # output_path=None so that the constructor does not create an empty <Model> subfolder; the paths are set here
+                    model = ModelClass(input_size=input_size, num_classes=num_classes, learning_rate=learning_rate, patience=patience, seed=seed, output_path=None)
+                    model.base_output_path = model_output_path
                     model.output_data_path = model_output_path
                     model.best_trained_path = os.path.join(model_output_path, f"{os.getpid()}_best_model.pth")
                     model.model_architecture_path = os.path.join(model_output_path, "model_architecture.pth")
@@ -107,7 +110,8 @@ if __name__ == "__main__":
                                                 pin_memory=True)
 
                     metrics = model.spinTrainEval(train_loader, test_loader, num_epochs = num_epochs)
-                    updateMetricsLogFile(metrics, metrics_log_file)
+                    # max_entries: other processes may have reached the target during this training
+                    updateMetricsLogFile(metrics, metrics_log_file, max_entries=num_iter, entry_pattern=date_pattern)
                     updated = True
 
             except Exception as e:
@@ -119,5 +123,8 @@ if __name__ == "__main__":
                 # traceback.print_exception(*sys.exc_info()) 
                 print(F"[ERROR] --- \n[ERROR] --- \n")
 
+    if exception_messages != "":
+        print(f"[ERROR] Exceptions catched during execution: {exception_messages}")
+        print(f"[ERROR] Stopped with errors: the iterations configured may not be complete")
+        sys.exit(1)
     print(f"Finished all iterations configured for all models")
-    if exception_messages != "": print(f"[ERROR] Exceptions catched during execution: {exception_messages}")
