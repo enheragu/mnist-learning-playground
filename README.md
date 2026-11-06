@@ -153,6 +153,7 @@ To rebuild the deposit from your own outputs, run `python src/08_export_zenodo.p
 | `src/check_dataset.py` | Number of images per class in MNIST. |
 | `src/check_loss_surfaces.py` | 2D loss surfaces of trained CNN_14L models. |
 | `scripts/article/` | Tables and numbers of the article that the pipeline does not produce. |
+| `scripts/export_web_data.py` | Data files for MLV Tools, from the deposit. |
 | `scripts/gpu_check/` | Cross-GPU replication study, with its seed pool in `seed_pools.yaml`. |
 
 | Folder | What it holds |
