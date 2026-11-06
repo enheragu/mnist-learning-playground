@@ -12,6 +12,9 @@ Versioning note: minor releases mark visible feature jumps; patch releases cover
 maintenance updates, including docs polish that does not change behavior. Versions prior to 1.0.0
 were reconstructed from the git history, with each tag on the last commit of its version.
 
+## [1.0.2](https://github.com/enheragu/mnist-learning-playground/releases/tag/v1.0.2) - 2026-11-06
+- Feature: export of the data files of the MLV Tools viewer from the deposit, so the viewer shows the same valid YOLOv8 runs and complete ablation iterations as the article, in the order of its figures.
+
 ## [1.0.1](https://github.com/enheragu/mnist-learning-playground/releases/tag/v1.0.1) - 2026-11-06
 
 First release archived in Zenodo, so that the articles that use this code can cite a fixed version of it.

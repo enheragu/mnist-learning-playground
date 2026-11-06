@@ -43,7 +43,7 @@ keywords:
   - object detection
   - YOLO
   - reproducibility
-version: 1.0.1
+version: 1.0.2
 license: MIT
 doi: 10.5281/zenodo.24003004
 identifiers:
