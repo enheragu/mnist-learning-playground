@@ -174,7 +174,7 @@ To rebuild the deposit from your own outputs, run `python src/08_export_zenodo.p
 
 If you use this software, please cite it: the metadata are in [`CITATION.cff`](CITATION.cff), and GitHub's *Cite this
 repository* button exports them as APA or BibTeX. The DOI [10.5281/zenodo.24003004](https://doi.org/10.5281/zenodo.24003004) always resolves to the
-latest release; each release also has its own DOI (v1.0.1: [10.5281/zenodo.24003005](https://doi.org/10.5281/zenodo.24003005)), which is the one to cite when
+latest release; each release also has its own DOI (v1.0.2: [10.5281/zenodo.24020838](https://doi.org/10.5281/zenodo.24020838)), which is the one to cite when
 reporting results obtained with that version. When reporting results, please also cite the article above.
 
 ## ⚖️ License
